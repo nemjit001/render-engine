@@ -4,6 +4,8 @@
 
 #include <SDL3/SDL.h>
 
+class RenderManager;
+
 /// @brief Enumeration of EngineResult result codes.
 enum EngineResult : int
 {
@@ -16,7 +18,7 @@ class Engine
 {
 private:
     /// @brief Initialize the engine.
-    /// @return 
+    /// @return A boolean indicating success.
     [[nodiscard]] bool Init();
 
     /// @brief Shut down the engine.
@@ -36,6 +38,7 @@ public:
 
 private:
     static bool gIsRunning;
+    static RenderManager* gRenderManager;
 };
 
 #endif //ENGINE_HPP

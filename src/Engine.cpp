@@ -1,8 +1,10 @@
 #include "Engine.hpp"
 
 #include <spdlog/spdlog.h>
+#include "RenderManager.hpp"
 
 bool Engine::gIsRunning = false;
+RenderManager* Engine::gRenderManager = nullptr;
 
 bool Engine::Init()
 {
@@ -16,6 +18,14 @@ bool Engine::Init()
         return false;
     }
 
+    spdlog::info("Initializing render manager");
+    gRenderManager = &RenderManager::Get();
+    if (!gRenderManager->Init())
+    {
+        spdlog::error("Failed to initialize render manager");
+        return false;
+    }
+
     spdlog::info("Initialized!");
     gIsRunning = true;
     return true;
@@ -24,6 +34,9 @@ bool Engine::Init()
 void Engine::Shutdown()
 {
     spdlog::info("Shutting down...");
+
+    spdlog::info("Shutting down render manager");
+    gRenderManager->Shutdown();
 
     spdlog::info("Shutting down window system");
     SDL_Quit();
@@ -34,8 +47,10 @@ void Engine::Shutdown()
 void Engine::PumpPlatformEvents()
 {
     SDL_Event event{};
-    while (SDL_PollEvent(&event)) {
+    while (SDL_PollEvent(&event))
+    {
         ProcessEvent(event);
+        gRenderManager->ProcessEvent(event);
     }
 }
 
@@ -57,6 +72,7 @@ EngineResult Engine::Run()
     while (gIsRunning)
     {
         PumpPlatformEvents();
+        gRenderManager->Frame();
     }
 
     // Do cleanup

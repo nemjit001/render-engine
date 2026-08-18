@@ -17,6 +17,8 @@ target_sources(RenderEngine
         src/main.cpp
         src/Engine.cpp
         src/Engine.hpp
+        src/RenderManager.cpp
+        src/RenderManager.hpp
 )
 target_compile_features(RenderEngine
     PRIVATE
