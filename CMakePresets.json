@@ -20,7 +20,7 @@
             "name": "gcc-x64",
             "inherits": "base",
             "environment": {
-                "C": "gcc",
+                "CC": "gcc",
                 "CXX": "g++"
             },
             "condition": {
@@ -34,7 +34,7 @@
             "inherits": "base",
             "generator": "Visual Studio 18 2026",
             "environment": {
-                "C": "cl",
+                "CC": "cl",
                 "CXX": "cl"
             },
             "condition": {
@@ -47,8 +47,13 @@
             "name": "clang-x64",
             "inherits": "base",
             "environment": {
-                "C": "clang",
+                "CC": "clang",
                 "CXX": "clang++"
+            },
+            "vendor": {
+                "microsoft.com/VisualStudioSettings/CMake/1.0": {
+                "intelliSenseMode": "windows-clang-x64"
+                }
             }
         }
     ],

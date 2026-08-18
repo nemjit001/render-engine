@@ -15,6 +15,12 @@ add_executable(RenderEngine WIN32)
 target_sources(RenderEngine
     PRIVATE
         src/main.cpp
+        src/Engine.cpp
+        src/Engine.hpp
+)
+target_compile_features(RenderEngine
+    PRIVATE
+        cxx_std_17
 )
 target_link_libraries(RenderEngine
     PRIVATE
