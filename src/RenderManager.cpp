@@ -56,6 +56,40 @@ static bool IsExtensionAvailable(std::vector<VkExtensionProperties> const& exten
     return false;
 }
 
+/// @brief Try to enable a layer name.
+/// @param enabledLayerNames Enabled layer names list to store enabled layer name in.
+/// @param availableLayers Available layer list to use for availability search.
+/// @param layerName Layer name to add.
+/// @return A boolean indicating whether the name was added to the list.
+[[maybe_unused]] static bool TryEnableLayer(std::vector<char const*>& enabledLayerNames, std::vector<VkLayerProperties> const& availableLayers, char const* layerName)
+{
+    if (IsLayerAvailable(availableLayers, layerName))
+    {
+        spdlog::trace("Enabled layer: {}", layerName);
+        enabledLayerNames.push_back(layerName);
+        return true;
+    }
+
+    return false;
+}
+
+/// @brief Try to enable an extension name.
+/// @param enabledExtensionNames Enabled extension names list to store enabled extension name in.
+/// @param availableExtensions Available extension list to use for availability search.
+/// @param extensionName Extension name to add.
+/// @return A boolean indicating whether the name was added to the list.
+static bool TryEnableExtension(std::vector<char const*>& enabledExtensionNames, std::vector<VkExtensionProperties> const& availableExtensions, char const* extensionName)
+{
+    if (IsExtensionAvailable(availableExtensions, extensionName))
+    {
+        spdlog::trace("Enabled extension: {}", extensionName);
+        enabledExtensionNames.push_back(extensionName);
+        return true;
+    }
+    
+    return false;
+}
+
 RenderManager& RenderManager::Get()
 {
     static RenderManager instance{};
@@ -96,14 +130,14 @@ bool RenderManager::Init(RenderManagerInitInfo const& initInfo)
     // Create instance
     {
         // Get instance layers and extensions
-        std::vector<VkLayerProperties> availableInstanceLayers = []() {
+        std::vector<VkLayerProperties> const availableInstanceLayers = []() {
             uint32_t layerCount = 0;
             vkEnumerateInstanceLayerProperties(&layerCount, nullptr);
             std::vector<VkLayerProperties> availableLayers(layerCount);
             vkEnumerateInstanceLayerProperties(&layerCount, availableLayers.data());
             return availableLayers;
         }();
-        std::vector<VkExtensionProperties> availableInstanceExtensions = []() {
+        std::vector<VkExtensionProperties> const availableInstanceExtensions = []() {
             uint32_t extensionCount = 0;
             vkEnumerateInstanceExtensionProperties(nullptr, &extensionCount, nullptr);
             std::vector<VkExtensionProperties> availableExtensions(extensionCount);
@@ -111,61 +145,36 @@ bool RenderManager::Init(RenderManagerInitInfo const& initInfo)
             return availableExtensions;
         }();
 
-        // Get required instance extensions
-        uint32_t requiredExtensionCount = 0;
-        char const* const* requiredInstanceExtensions = SDL_Vulkan_GetInstanceExtensions(&requiredExtensionCount);
-
         // Enable instance layers and extensions
         std::vector<char const*> enabledInstanceLayers;
-        spdlog::trace("Searching for Vulkan instance layers");
+        if constexpr (RENDERER_ENABLE_DEBUG)
         {
-            if constexpr (RENDERER_ENABLE_DEBUG)
+            spdlog::trace("Searching for Vulkan instance layers");
+            TryEnableLayer(enabledInstanceLayers, availableInstanceLayers, "VK_LAYER_KHRONOS_validation");
+            TryEnableLayer(enabledInstanceLayers, availableInstanceLayers, "VK_LAYER_KHRONOS_synchronization2");
+        }
+
+        // Enable instance extensions
+        spdlog::trace("Searching for Vulkan instance extensions");
+        std::vector<char const*> enabledInstanceExtensions;
+
+        uint32_t requiredExtensionCount = 0;
+        char const* const* requiredInstanceExtensions = SDL_Vulkan_GetInstanceExtensions(&requiredExtensionCount);
+        for (uint32_t i = 0; i < requiredExtensionCount; i++)
+        {
+            if (!TryEnableExtension(enabledInstanceExtensions, availableInstanceExtensions, requiredInstanceExtensions[i]))
             {
-                char const* validationLayerName = "VK_LAYER_KHRONOS_validation";
-                if (IsLayerAvailable(availableInstanceLayers, validationLayerName))
-                {
-                    spdlog::trace("Enabling instance layer: {}", validationLayerName);
-                    enabledInstanceLayers.push_back(validationLayerName);
-                }
-                
-                char const* synchronizationLayerName = "VK_LAYER_KHRONOS_synchronization2";
-                if (IsLayerAvailable(availableInstanceLayers, synchronizationLayerName))
-                {
-                    spdlog::trace("Enabling instance layer: {}", synchronizationLayerName);
-                    enabledInstanceLayers.push_back(synchronizationLayerName);
-                }
+                spdlog::error("Required instance extension not available: {}", requiredInstanceExtensions[i]);
+                return false;
             }
         }
 
-        spdlog::trace("Searching for required Vulkan instance extensions");
-        std::vector<char const*> enabledInstanceExtensions;
+        if constexpr (RENDERER_ENABLE_DEBUG)
         {
-            for (uint32_t i = 0; i < requiredExtensionCount; i++)
+            if (!TryEnableExtension(enabledInstanceExtensions, availableInstanceExtensions, VK_EXT_DEBUG_UTILS_EXTENSION_NAME))
             {
-                if (IsExtensionAvailable(availableInstanceExtensions, requiredInstanceExtensions[i]))
-                {
-                    spdlog::trace("Found required instance extension: {}", requiredInstanceExtensions[i]);
-                    enabledInstanceExtensions.push_back(requiredInstanceExtensions[i]);
-                }
-                else
-                {
-                    spdlog::error("Required instance extension not available: {}", requiredInstanceExtensions[i]);
-                    return false;
-                }
-            }
-
-            if constexpr (RENDERER_ENABLE_DEBUG)
-            {
-                if (IsExtensionAvailable(availableInstanceExtensions, VK_EXT_DEBUG_UTILS_EXTENSION_NAME))
-                {
-                    spdlog::trace("Found required instance extension: {}", VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
-                    enabledInstanceExtensions.push_back(VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
-                }
-                else
-                {
-                    spdlog::error("Required instance extension not available: {}", VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
-                    return false;
-                }
+                spdlog::error("Required instance extension not available: {}", VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
+                return false;
             }
         }
 
