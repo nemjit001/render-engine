@@ -6,6 +6,12 @@
 #include <volk.h>
 #include <vk_mem_alloc.h>
 
+#ifndef NDEBUG
+static constexpr bool RENDERER_ENABLE_DEBUG = true;
+#else
+static constexpr bool RENDERER_ENABLE_DEBUG = false;
+#endif //NDEBUG
+
 /// @brief Initialization info for the render manager.
 struct RenderManagerInitInfo
 {
@@ -47,6 +53,10 @@ public:
 
     /// @brief Target Vulkan api version against which the application is written.
     static constexpr uint32_t TARGET_VULKAN_VERSION = VK_API_VERSION_1_3;
+
+private:
+    VkInstance _instance = VK_NULL_HANDLE;
+    VkDebugUtilsMessengerEXT _debugMessenger = VK_NULL_HANDLE;
 };
 
 #endif //RENDER_MANAGER_HPP
