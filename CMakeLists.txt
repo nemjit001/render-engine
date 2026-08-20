@@ -9,6 +9,8 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 include(dependencies.cmake)
 find_package(SDL3 CONFIG REQUIRED)
 find_package(spdlog CONFIG REQUIRED)
+find_package(volk CONFIG REQUIRED)
+find_package(VulkanMemoryAllocator CONFIG REQUIRED)
 
 # Set up RenderEngine target
 add_executable(RenderEngine WIN32)
@@ -26,8 +28,10 @@ target_compile_features(RenderEngine
 )
 target_link_libraries(RenderEngine
     PRIVATE
+        GPUOpen::VulkanMemoryAllocator
         SDL3::SDL3
         spdlog::spdlog
+        volk::volk_headers
 )
 
 # Copy runtime dll dependencies

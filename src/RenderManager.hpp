@@ -3,6 +3,16 @@
 #define RENDER_MANAGER_HPP
 
 #include <SDL3/SDL.h>
+#include <volk.h>
+#include <vk_mem_alloc.h>
+
+/// @brief Initialization info for the render manager.
+struct RenderManagerInitInfo
+{
+    char const* windowTitle;
+    uint32_t windowWidth;
+    uint32_t windowHeight;
+};
 
 /// @brief The RenderManager manages render resources and frame submission.
 class RenderManager
@@ -21,8 +31,9 @@ public:
     [[nodiscard]] static RenderManager& Get();
 
     /// @brief Initialize the render manager.
+    /// @param initInfo Initialization info.
     /// @return A boolean indicating success.
-    [[nodiscard]] bool Init();
+    [[nodiscard]] bool Init(RenderManagerInitInfo const& initInfo);
 
     /// @brief Shut down the render manager.
     void Shutdown();
@@ -33,6 +44,9 @@ public:
 
     /// @brief Render a frame.
     void Frame();
+
+    /// @brief Target Vulkan api version against which the application is written.
+    static constexpr uint32_t TARGET_VULKAN_VERSION = VK_API_VERSION_1_3;
 };
 
 #endif //RENDER_MANAGER_HPP
