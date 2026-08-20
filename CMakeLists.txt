@@ -21,6 +21,7 @@ target_sources(RenderEngine
         src/Engine.hpp
         src/RenderManager.cpp
         src/RenderManager.hpp
+        src/UseVulkanLibs.cpp
 )
 target_compile_features(RenderEngine
     PRIVATE
@@ -33,6 +34,13 @@ target_link_libraries(RenderEngine
         spdlog::spdlog
         volk::volk_headers
 )
+
+# Set up target warnings
+if (MSVC)
+    target_compile_options(RenderEngine PRIVATE /W4 /permissive-)
+else()
+    target_compile_options(RenderEngine PRIVATE -Wall -Wextra -Wpedantic -Wshadow)
+endif()
 
 # Copy runtime dll dependencies
 add_custom_command(TARGET RenderEngine POST_BUILD

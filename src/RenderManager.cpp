@@ -1,12 +1,7 @@
 #include "RenderManager.hpp"
 
-#define VOLK_IMPLEMENTATION
-#define VMA_IMPLEMENTATION
-
 #include <spdlog/spdlog.h>
 #include <SDL3/SDL_vulkan.h>
-#include <volk.h>
-#include <vk_mem_alloc.h>
 
 #define VK_SUCCEEDED(result)    (result == VK_SUCCESS)
 #define VK_FAILED(result)       (result != VK_SUCCESS)
