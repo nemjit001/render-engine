@@ -16,9 +16,10 @@ static constexpr bool RENDERER_ENABLE_DEBUG = false;
 /// @brief Initialization info for the render manager.
 struct RenderManagerInitInfo
 {
-    char const* windowTitle;
-    uint32_t windowWidth;
-    uint32_t windowHeight;
+    char const* windowTitle = "App";    //< Default window title.
+    uint32_t windowWidth = 1280u;       //< Initial window width.
+    uint32_t windowHeight = 720u;       //< Initial window height.
+    uint32_t framesInFlight = 2u;       //< Number of frames that may be recorded simultaneously, lower values means lower frame latency, values in the range [1, 3] are recommended.
 };
 
 /// @brief The RenderManager manages render resources and frame submission.
@@ -49,11 +50,16 @@ public:
     /// @param event Event to process.
     void ProcessEvent(SDL_Event const& event);
 
+    /// @brief Handle a window resize event.
+    void OnWindowResize();
+
     /// @brief Render a frame.
     void Frame();
 
     /// @brief Target Vulkan api version against which the application is written.
     static constexpr uint32_t TARGET_VULKAN_VERSION = VK_API_VERSION_1_3;
+    /// @brief Preferred Vulkan swap surface format.
+    static constexpr VkFormat PREFERRED_SWAP_FORMAT = VK_FORMAT_R8G8B8A8_SRGB;
 
 private:
     /// @brief The VulkanPhysicalDeviceInfo struct is used to store a physical device and its related
@@ -68,6 +74,26 @@ private:
         VkPhysicalDeviceVulkan12Features enabledVulkan12Features;
         VkPhysicalDeviceVulkan13Features enabledVulkan13Features;
         uint32_t directQueueFamily;
+    };
+
+    struct VulkanSwapchainConfig
+    {
+        uint32_t width;
+        uint32_t height;
+        uint32_t imageCount;
+        VkSurfaceFormatKHR surfaceFormat;
+        VkPresentModeKHR presentMode;
+        VkSurfaceTransformFlagBitsKHR surfaceTransform;
+    };
+
+    struct VulkanWindowState
+    {
+        SDL_Window* window = nullptr;
+        VkSurfaceKHR surface = VK_NULL_HANDLE;
+        VkSwapchainKHR swapchain = VK_NULL_HANDLE;
+        VulkanSwapchainConfig swapchainConfig;
+        std::vector<VkImage> swapImages;
+        std::vector<VkImageView> swapImageViews;
     };
 
 private:
@@ -85,11 +111,45 @@ private:
     /// @return A boolean indicating success.
     bool CreateVulkanDevice(VulkanPhysicalDeviceInfo const& physicalDeviceInfo);
 
+    /// @brief Create the Vulkan window state.
+    /// @param title Window title.
+    /// @param width Window width.
+    /// @param height window height.
+    /// @return A boolean indicating success.
+    bool CreateVulkanWindowState(char const* title, uint32_t width, uint32_t height);
+
     /// @brief Destroy the Vulkan instance state.
     void DestroyVulkanInstance();
 
     /// @brief Destroy the Vulkan device state.
     void DestroyVulkanDevice();
+
+    /// @brief Destroy the Vulkan window state.
+    void DestroyVulkanWindowState();
+
+    /// @brief Get the Vulkan swapchain configuration for a window and surface combination.
+    /// @param window Window to query config for.
+    /// @param surface Surface to query config for.
+    /// @param preferredSurfaceFormat Preferred swap surface format.
+    /// @param preferredPresentMode Preferred swap present mode.
+    /// @return The swapchain configuration.
+    VulkanSwapchainConfig GetVulkanSwapchainConfiguration(
+        SDL_Window* window,
+        VkSurfaceKHR surface,
+        VkFormat preferredSurfaceFormat,
+        VkPresentModeKHR preferredPresentMode
+    ) const;
+
+    /// @brief Configure the Vulkan swapchain for a Vulkan window state.
+    /// @param windowState WindowState to configure swapchain for.
+    /// @param preferredFormat Preferred surface format.
+    /// @param preferredPresentMode Preferred present mode.
+    /// @return A boolean indicating success.
+    bool ConfigureSwapchain(VulkanWindowState& windowState, VkFormat preferredFormat, VkPresentModeKHR preferredPresentMode) const;
+
+    /// @brief Destroy the Vulkan swapchain image state.
+    /// @param windowState WindowState to destroy image state for.
+    void DestroySwapchainImageState(VulkanWindowState& windowState) const;
 
 private:
     VkInstance _instance = VK_NULL_HANDLE;
@@ -98,6 +158,7 @@ private:
     VulkanPhysicalDeviceInfo _physicalDeviceInfo = {};
     VkDevice _device = VK_NULL_HANDLE;
     VkQueue _directQueue = VK_NULL_HANDLE;
+    VulkanWindowState _windowState = {};
 };
 
 #endif //RENDER_MANAGER_HPP

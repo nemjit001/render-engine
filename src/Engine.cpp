@@ -21,8 +21,9 @@ bool Engine::Init()
     spdlog::info("Initializing render manager");
     RenderManagerInitInfo renderManagerInitInfo{};
     renderManagerInitInfo.windowTitle = "Render Engine";
-    renderManagerInitInfo.windowWidth = 1280;
-    renderManagerInitInfo.windowHeight = 720;
+    renderManagerInitInfo.windowWidth = 1280u;
+    renderManagerInitInfo.windowHeight = 720u;
+    renderManagerInitInfo.framesInFlight = 2u;
 
     gRenderManager = &RenderManager::Get();
     if (!gRenderManager->Init(renderManagerInitInfo))

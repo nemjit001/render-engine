@@ -155,11 +155,17 @@ bool RenderManager::Init(RenderManagerInitInfo const& initInfo)
         return false;
     }
 
+    // Create the Vulkan window state
+    if (!CreateVulkanWindowState(initInfo.windowTitle, initInfo.windowWidth, initInfo.windowHeight)) {
+        return false;
+    }
+
     return true;
 }
 
 void RenderManager::Shutdown()
 {
+    DestroyVulkanWindowState();
     DestroyVulkanDevice();
     DestroyVulkanInstance();
 
@@ -170,7 +176,16 @@ void RenderManager::Shutdown()
 
 void RenderManager::ProcessEvent(SDL_Event const& event)
 {
-    //
+    if (event.type == SDL_EVENT_WINDOW_RESIZED && event.window.windowID == SDL_GetWindowID(_windowState.window)) {
+        OnWindowResize();
+    }
+}
+
+void RenderManager::OnWindowResize()
+{
+    if (!ConfigureSwapchain(_windowState, PREFERRED_SWAP_FORMAT, VK_PRESENT_MODE_FIFO_KHR)) {
+        spdlog::error("Failed to reconfigure Vulkan swapchain, continuing with outdated swapchain");
+    }
 }
 
 void RenderManager::Frame()
@@ -494,9 +509,42 @@ bool RenderManager::CreateVulkanDevice(VulkanPhysicalDeviceInfo const& physicalD
     return true;
 }
 
+bool RenderManager::CreateVulkanWindowState(char const* title, uint32_t width, uint32_t height)
+{
+    // Create window
+    spdlog::trace("Creating window");
+    SDL_Window* window = SDL_CreateWindow(title, width, height, SDL_WINDOW_RESIZABLE | SDL_WINDOW_HIGH_PIXEL_DENSITY | SDL_WINDOW_VULKAN);
+    if (!window)
+    {
+        spdlog::error("Failed to create window: {}", SDL_GetError());
+        return false;
+    }
+
+    // Create surface
+    spdlog::trace("Creating Vulkan surface");
+    VkSurfaceKHR surface = VK_NULL_HANDLE;
+    if (!SDL_Vulkan_CreateSurface(window, _instance, nullptr, &surface))
+    {
+        spdlog::error("Failed to create Vulkan surface");
+        return false;
+    }
+
+    _windowState = VulkanWindowState{};
+    _windowState.window = window;
+    _windowState.surface = surface;
+    if (!ConfigureSwapchain(_windowState, PREFERRED_SWAP_FORMAT, VK_PRESENT_MODE_FIFO_KHR))
+    {
+        spdlog::error("Failed to configure Vulkan swapchain");
+        return false;
+    }
+
+    return true;
+}
+
 void RenderManager::DestroyVulkanInstance()
 {
     spdlog::trace("Cleaning up instance data");
+
     if constexpr (RENDERER_ENABLE_DEBUG) {
         vkDestroyDebugUtilsMessengerEXT(_instance, _debugMessenger, nullptr);
     }
@@ -506,8 +554,191 @@ void RenderManager::DestroyVulkanInstance()
 void RenderManager::DestroyVulkanDevice()
 {
     spdlog::trace("Cleaning up device data");
+
     vkDestroyDevice(_device, nullptr);
     _directQueue = VK_NULL_HANDLE;
     _physicalDeviceInfo = {};
     _physicalDevice = VK_NULL_HANDLE;
+}
+
+void RenderManager::DestroyVulkanWindowState()
+{
+    spdlog::trace("Cleaning up window state");
+
+    DestroySwapchainImageState(_windowState);
+    vkDestroySwapchainKHR(_device, _windowState.swapchain, nullptr);
+    vkDestroySurfaceKHR(_instance, _windowState.surface, nullptr);
+    SDL_DestroyWindow(_windowState.window);
+    _windowState = VulkanWindowState{};
+}
+
+RenderManager::VulkanSwapchainConfig RenderManager::GetVulkanSwapchainConfiguration(
+    SDL_Window* window,
+    VkSurfaceKHR surface,
+    VkFormat preferredSurfaceFormat,
+    VkPresentModeKHR preferredPresentMode
+) const
+{
+    // Get window size in pixels
+    int32_t windowWidth = 0, windowHeight = 0;
+    SDL_GetWindowSizeInPixels(window, &windowWidth, &windowHeight);
+
+    // Get surface capabilities
+    VkSurfaceCapabilitiesKHR surfaceCapabilities{};
+    vkGetPhysicalDeviceSurfaceCapabilitiesKHR(_physicalDevice, surface, &surfaceCapabilities);
+
+    // Get surface formats and present modes
+    std::vector<VkSurfaceFormatKHR> const availableSurfaceFormats = [](VkPhysicalDevice physicalDevice, VkSurfaceKHR surface) {
+        uint32_t surfaceFormatCount = 0;
+        vkGetPhysicalDeviceSurfaceFormatsKHR(physicalDevice, surface, &surfaceFormatCount, nullptr);
+        std::vector<VkSurfaceFormatKHR> surfaceFormats(surfaceFormatCount);
+        vkGetPhysicalDeviceSurfaceFormatsKHR(physicalDevice, surface, &surfaceFormatCount, surfaceFormats.data());
+        return surfaceFormats;
+    }(_physicalDevice, surface);
+    std::vector<VkPresentModeKHR> const availablePresentModes = [](VkPhysicalDevice physicalDevice, VkSurfaceKHR surface) {
+        uint32_t presentModeCount = 0;
+        vkGetPhysicalDeviceSurfacePresentModesKHR(physicalDevice, surface, &presentModeCount, nullptr);
+        std::vector<VkPresentModeKHR> presentModes(presentModeCount);
+        vkGetPhysicalDeviceSurfacePresentModesKHR(physicalDevice, surface, &presentModeCount, presentModes.data());
+        return presentModes;
+    }(_physicalDevice, surface);
+
+    // Find surface configuration that matches requirements
+    uint32_t const preferredImageCount = surfaceCapabilities.minImageCount + 1;
+    uint32_t const minImageCount = surfaceCapabilities.maxImageCount == 0 ? preferredImageCount : std::min(surfaceCapabilities.maxImageCount, preferredImageCount);
+
+    VkSurfaceFormatKHR const swapSurfaceFormat = [&availableSurfaceFormats, &preferredSurfaceFormat]() {
+        for (auto const& format : availableSurfaceFormats)
+        {
+            if (format.format == preferredSurfaceFormat) {
+                return format;
+            }
+        }
+
+        // TODO(nemjit001): Add better fallback handling for unsupported surface formats
+        return availableSurfaceFormats[0]; // Return first available format
+    }();
+
+    VkPresentModeKHR const presentMode = [&availablePresentModes, &preferredPresentMode]() {
+        for (auto const& presentMode : availablePresentModes)
+        {
+            if (presentMode == preferredPresentMode) {
+                return presentMode;
+            }
+        }
+
+        return VK_PRESENT_MODE_FIFO_KHR; // Return fifo since it is always supported
+    }();
+
+    return VulkanSwapchainConfig{
+        static_cast<uint32_t>(windowWidth),
+        static_cast<uint32_t>(windowHeight),
+        minImageCount,
+        swapSurfaceFormat,
+        presentMode,
+        surfaceCapabilities.currentTransform,
+    };
+}
+
+bool RenderManager::ConfigureSwapchain(VulkanWindowState& windowState, VkFormat preferredFormat, VkPresentModeKHR preferredPresentMode) const
+{
+    spdlog::trace("Configuring Vulkan swapchain");
+    VkSwapchainKHR oldSwapchain = windowState.swapchain;
+
+    // Create swapchain
+    VulkanSwapchainConfig const swapchainConfig = GetVulkanSwapchainConfiguration(windowState.window, windowState.surface, preferredFormat, preferredPresentMode);
+    spdlog::trace("Swapchain extent: {}x{}", swapchainConfig.width, swapchainConfig.height);
+
+    VkSwapchainCreateInfoKHR swapchainCreateInfo{};
+    swapchainCreateInfo.sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;
+    swapchainCreateInfo.pNext = nullptr;
+    swapchainCreateInfo.flags = 0;
+    swapchainCreateInfo.surface = windowState.surface;
+    swapchainCreateInfo.minImageCount = swapchainConfig.imageCount;
+    swapchainCreateInfo.imageFormat = swapchainConfig.surfaceFormat.format;
+    swapchainCreateInfo.imageColorSpace = swapchainConfig.surfaceFormat.colorSpace;
+    swapchainCreateInfo.imageExtent = { swapchainConfig.width, swapchainConfig.height };
+    swapchainCreateInfo.imageArrayLayers = 1;
+    swapchainCreateInfo.imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
+    swapchainCreateInfo.imageSharingMode = VK_SHARING_MODE_EXCLUSIVE;
+    swapchainCreateInfo.queueFamilyIndexCount = 0;
+    swapchainCreateInfo.pQueueFamilyIndices = nullptr;
+    swapchainCreateInfo.preTransform = swapchainConfig.surfaceTransform;
+    swapchainCreateInfo.compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
+    swapchainCreateInfo.presentMode = swapchainConfig.presentMode;
+    swapchainCreateInfo.clipped = VK_FALSE;
+    swapchainCreateInfo.oldSwapchain = oldSwapchain;
+
+    spdlog::trace("Creating Vulkan swapchain");
+    VkSwapchainKHR swapchain = VK_NULL_HANDLE;
+    if (VK_FAILED(vkCreateSwapchainKHR(_device, &swapchainCreateInfo, nullptr, &swapchain)))
+    {
+        spdlog::error("Failed to create Vulkan swapchain");
+        return false;
+    }
+
+    // Get swapchain images
+    spdlog::trace("Creating Vulkan swapchain images");
+    std::vector<VkImage> const swapImages = [](VkDevice device, VkSwapchainKHR swapchain) {
+        uint32_t imageCount = 0;
+        vkGetSwapchainImagesKHR(device, swapchain, &imageCount, nullptr);
+        std::vector<VkImage> swapImages(imageCount);
+        vkGetSwapchainImagesKHR(device, swapchain, &imageCount, swapImages.data());
+        return swapImages;
+    }(_device, swapchain);
+
+    // Create swapchain image views
+    spdlog::trace("Creating Vulkan swapchain image views");
+    std::vector<VkImageView> swapImageViews;
+    swapImageViews.reserve(swapImages.size());
+    for (auto const& image : swapImages)
+    {
+        VkImageViewCreateInfo imageViewCreateInfo{};
+        imageViewCreateInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+        imageViewCreateInfo.pNext = nullptr;
+        imageViewCreateInfo.flags = 0;
+        imageViewCreateInfo.image = image;
+        imageViewCreateInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
+        imageViewCreateInfo.format = swapchainConfig.surfaceFormat.format;
+        imageViewCreateInfo.components.r = VK_COMPONENT_SWIZZLE_IDENTITY;
+        imageViewCreateInfo.components.g = VK_COMPONENT_SWIZZLE_IDENTITY;
+        imageViewCreateInfo.components.b = VK_COMPONENT_SWIZZLE_IDENTITY;
+        imageViewCreateInfo.components.a = VK_COMPONENT_SWIZZLE_IDENTITY;
+        imageViewCreateInfo.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+        imageViewCreateInfo.subresourceRange.baseMipLevel = 0;
+        imageViewCreateInfo.subresourceRange.levelCount = 1;
+        imageViewCreateInfo.subresourceRange.baseArrayLayer = 0;
+        imageViewCreateInfo.subresourceRange.layerCount = 1;
+
+        VkImageView imageView = VK_NULL_HANDLE;
+        if (VK_FAILED(vkCreateImageView(_device, &imageViewCreateInfo, nullptr, &imageView)))
+        {
+            spdlog::error("Failed to create Vulkan swapchain image view");
+            return false;
+        }
+
+        swapImageViews.push_back(imageView);
+    }
+
+    // Delete old swapchain state on successful recreation
+    DestroySwapchainImageState(windowState);
+    vkDestroySwapchainKHR(_device, oldSwapchain, nullptr);
+
+    // Set new swapchain state
+    windowState.swapchain = swapchain;
+    windowState.swapchainConfig = swapchainConfig;
+    windowState.swapImages = swapImages;
+    windowState.swapImageViews = swapImageViews;
+    return true;
+}
+
+void RenderManager::DestroySwapchainImageState(VulkanWindowState& windowState) const
+{
+    for (auto const& view : windowState.swapImageViews) {
+        vkDestroyImageView(_device, view, nullptr);
+    }
+
+    windowState.swapImageViews.clear();
+    windowState.swapImages.clear();
+    windowState.swapchainConfig = {};
 }
