@@ -155,6 +155,11 @@ bool RenderManager::Init(RenderManagerInitInfo const& initInfo)
         return false;
     }
 
+    // Create the Vulkan frame state
+    if (!CreateVulkanFrameState(initInfo.framesInFlight)) {
+        return false;
+    }
+
     // Create the Vulkan window state
     if (!CreateVulkanWindowState(initInfo.windowTitle, initInfo.windowWidth, initInfo.windowHeight)) {
         return false;
@@ -166,6 +171,7 @@ bool RenderManager::Init(RenderManagerInitInfo const& initInfo)
 void RenderManager::Shutdown()
 {
     DestroyVulkanWindowState();
+    DestroyVulkanFrameState();
     DestroyVulkanDevice();
     DestroyVulkanInstance();
 
@@ -183,6 +189,10 @@ void RenderManager::ProcessEvent(SDL_Event const& event)
 
 void RenderManager::OnWindowResize()
 {
+    // Ensure all queued work is finished, ensuring any swapchain resources in-flight are no longer in use
+    vkDeviceWaitIdle(_device);
+
+    // Reconfigure swapchain
     if (!ConfigureSwapchain(_windowState, PREFERRED_SWAP_FORMAT, VK_PRESENT_MODE_FIFO_KHR)) {
         spdlog::error("Failed to reconfigure Vulkan swapchain, continuing with outdated swapchain");
     }
@@ -509,6 +519,58 @@ bool RenderManager::CreateVulkanDevice(VulkanPhysicalDeviceInfo const& physicalD
     return true;
 }
 
+bool RenderManager::CreateVulkanFrameState(uint32_t framesInFlight)
+{
+    _framesInFlight = framesInFlight;
+    if (framesInFlight == 0 || framesInFlight > 3)
+    {
+        spdlog::error("Provided frames in flight number is outside of recommended range of [0, 3] (was {})", framesInFlight);
+        return false;
+    }
+
+    _frameStates.resize(_framesInFlight);
+    for (auto& frameState : _frameStates)
+    {
+        VkFenceCreateInfo frameFenceCreateInfo{};
+        frameFenceCreateInfo.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
+        frameFenceCreateInfo.pNext = nullptr;
+        frameFenceCreateInfo.flags = VK_FENCE_CREATE_SIGNALED_BIT;
+
+        if (VK_FAILED(vkCreateFence(_device, &frameFenceCreateInfo, nullptr, &frameState.frameReadyFence)))
+        {
+            spdlog::error("Failed to create Vulkan frame fence");
+            return false;
+        }
+
+        VkCommandPoolCreateInfo directCommandPoolCreateInfo{};
+        directCommandPoolCreateInfo.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
+        directCommandPoolCreateInfo.pNext = nullptr;
+        directCommandPoolCreateInfo.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
+        directCommandPoolCreateInfo.queueFamilyIndex = _physicalDeviceInfo.directQueueFamily;
+
+        if (VK_FAILED(vkCreateCommandPool(_device, &directCommandPoolCreateInfo, nullptr, &frameState.directCommandPool)))
+        {
+            spdlog::error("Failed to create Vulkan frame command pool");
+            return false;
+        }
+
+        VkCommandBufferAllocateInfo directCommandAllocateInfo{};
+        directCommandAllocateInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+        directCommandAllocateInfo.pNext = nullptr;
+        directCommandAllocateInfo.commandPool = frameState.directCommandPool;
+        directCommandAllocateInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+        directCommandAllocateInfo.commandBufferCount = 1;
+
+        if (VK_FAILED(vkAllocateCommandBuffers(_device, &directCommandAllocateInfo, &frameState.directCommandBuffer)))
+        {
+            spdlog::error("Failed to create Vulkan frame command buffer");
+            return false;
+        }
+    }
+
+    return true;
+}
+
 bool RenderManager::CreateVulkanWindowState(char const* title, uint32_t width, uint32_t height)
 {
     // Create window
@@ -543,7 +605,7 @@ bool RenderManager::CreateVulkanWindowState(char const* title, uint32_t width, u
 
 void RenderManager::DestroyVulkanInstance()
 {
-    spdlog::trace("Cleaning up instance data");
+    spdlog::trace("Cleaning up instance state");
 
     if constexpr (RENDERER_ENABLE_DEBUG) {
         vkDestroyDebugUtilsMessengerEXT(_instance, _debugMessenger, nullptr);
@@ -553,12 +615,27 @@ void RenderManager::DestroyVulkanInstance()
 
 void RenderManager::DestroyVulkanDevice()
 {
-    spdlog::trace("Cleaning up device data");
+    spdlog::trace("Cleaning up device state");
 
     vkDestroyDevice(_device, nullptr);
     _directQueue = VK_NULL_HANDLE;
     _physicalDeviceInfo = {};
     _physicalDevice = VK_NULL_HANDLE;
+}
+
+void RenderManager::DestroyVulkanFrameState()
+{
+    spdlog::trace("Cleaning up frame state");
+
+    for (auto const& frameState : _frameStates)
+    {
+        vkDestroyCommandPool(_device, frameState.directCommandPool, nullptr);
+        vkDestroyFence(_device, frameState.frameReadyFence, nullptr);
+    }
+
+    _frameStates.clear();
+    _currentFrameIndex = 0;
+    _framesInFlight = 0;
 }
 
 void RenderManager::DestroyVulkanWindowState()
@@ -720,6 +797,45 @@ bool RenderManager::ConfigureSwapchain(VulkanWindowState& windowState, VkFormat 
         swapImageViews.push_back(imageView);
     }
 
+    // Create Vulkan swap semaphores
+    std::vector<VkSemaphore> swapImageAcquiredSemaphores;
+    swapImageAcquiredSemaphores.reserve(_framesInFlight);
+    for (size_t i = 0; i < _framesInFlight; i++)
+    {
+        VkSemaphoreCreateInfo semaphoreCreateInfo{};
+        semaphoreCreateInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
+        semaphoreCreateInfo.pNext = nullptr;
+        semaphoreCreateInfo.flags = 0;
+
+        VkSemaphore semaphore = VK_NULL_HANDLE;
+        if (VK_FAILED(vkCreateSemaphore(_device, &semaphoreCreateInfo, nullptr, &semaphore)))
+        {
+            spdlog::error("Failed to create Vulkan swapchain semaphore");
+            return false;
+        }
+
+        swapImageAcquiredSemaphores.push_back(semaphore);
+    }
+
+    std::vector<VkSemaphore> swapImageReleasedSemaphores;
+    swapImageReleasedSemaphores.reserve(swapImages.size());
+    for (size_t i = 0; i < swapImages.size(); i++)
+    {
+        VkSemaphoreCreateInfo semaphoreCreateInfo{};
+        semaphoreCreateInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
+        semaphoreCreateInfo.pNext = nullptr;
+        semaphoreCreateInfo.flags = 0;
+
+        VkSemaphore semaphore = VK_NULL_HANDLE;
+        if (VK_FAILED(vkCreateSemaphore(_device, &semaphoreCreateInfo, nullptr, &semaphore)))
+        {
+            spdlog::error("Failed to create Vulkan swapchain semaphore");
+            return false;
+        }
+
+        swapImageReleasedSemaphores.push_back(semaphore);
+    }
+
     // Delete old swapchain state on successful recreation
     DestroySwapchainImageState(windowState);
     vkDestroySwapchainKHR(_device, oldSwapchain, nullptr);
@@ -729,11 +845,22 @@ bool RenderManager::ConfigureSwapchain(VulkanWindowState& windowState, VkFormat 
     windowState.swapchainConfig = swapchainConfig;
     windowState.swapImages = swapImages;
     windowState.swapImageViews = swapImageViews;
+    windowState.swapImageAcquiredSemaphores = swapImageAcquiredSemaphores;
+    windowState.swapImageReleasedSemaphores = swapImageReleasedSemaphores;
+    windowState.currentSwapImageIdx = 0;
     return true;
 }
 
 void RenderManager::DestroySwapchainImageState(VulkanWindowState& windowState) const
 {
+    for (auto const& semaphore : windowState.swapImageAcquiredSemaphores) {
+        vkDestroySemaphore(_device, semaphore, nullptr);
+    }
+
+    for (auto const& semaphore : windowState.swapImageReleasedSemaphores) {
+        vkDestroySemaphore(_device, semaphore, nullptr);
+    }
+
     for (auto const& view : windowState.swapImageViews) {
         vkDestroyImageView(_device, view, nullptr);
     }

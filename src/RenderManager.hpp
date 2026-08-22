@@ -76,6 +76,16 @@ private:
         uint32_t directQueueFamily;
     };
 
+    /// @brief The VulkanFrameState struct contains per-frame data that is used to record frame commands.
+    struct VulkanFrameState
+    {
+        VkFence frameReadyFence;
+        VkCommandPool directCommandPool;
+        VkCommandBuffer directCommandBuffer;
+    };
+
+    /// @brief The VulkanSwapchainConfig struct contains swapchain configuration data that
+    /// is queried from the physical device and render surface.
     struct VulkanSwapchainConfig
     {
         uint32_t width;
@@ -86,6 +96,7 @@ private:
         VkSurfaceTransformFlagBitsKHR surfaceTransform;
     };
 
+    /// @brief The VulkanWindowState struct contains state related to the render surface and swap chain.
     struct VulkanWindowState
     {
         SDL_Window* window = nullptr;
@@ -94,6 +105,9 @@ private:
         VulkanSwapchainConfig swapchainConfig;
         std::vector<VkImage> swapImages;
         std::vector<VkImageView> swapImageViews;
+        std::vector<VkSemaphore> swapImageAcquiredSemaphores; //< Sized on frames in flight
+        std::vector<VkSemaphore> swapImageReleasedSemaphores; //< Sized on swap image count
+        uint32_t currentSwapImageIdx;
     };
 
 private:
@@ -111,6 +125,11 @@ private:
     /// @return A boolean indicating success.
     bool CreateVulkanDevice(VulkanPhysicalDeviceInfo const& physicalDeviceInfo);
 
+    /// @brief Create the Vulkan frame state.
+    /// @param framesInFlight Number of frames in flight.
+    /// @return A boolean indicating success.
+    bool CreateVulkanFrameState(uint32_t framesInFlight);
+
     /// @brief Create the Vulkan window state.
     /// @param title Window title.
     /// @param width Window width.
@@ -123,6 +142,9 @@ private:
 
     /// @brief Destroy the Vulkan device state.
     void DestroyVulkanDevice();
+
+    /// @brief Destroy the Vulkan frame state.
+    void DestroyVulkanFrameState();
 
     /// @brief Destroy the Vulkan window state.
     void DestroyVulkanWindowState();
@@ -151,13 +173,27 @@ private:
     /// @param windowState WindowState to destroy image state for.
     void DestroySwapchainImageState(VulkanWindowState& windowState) const;
 
+    /// @brief Get the current frame in flight index in the range [0, frames in flight].
+    /// @return The frame in flight index.
+    uint32_t GetFrameInFlightIndex() const { return _currentFrameIndex % _framesInFlight; }
+
 private:
+    // Instance state
     VkInstance _instance = VK_NULL_HANDLE;
     VkDebugUtilsMessengerEXT _debugMessenger = VK_NULL_HANDLE;
+
+    // Device state
     VkPhysicalDevice _physicalDevice = VK_NULL_HANDLE;
     VulkanPhysicalDeviceInfo _physicalDeviceInfo = {};
     VkDevice _device = VK_NULL_HANDLE;
     VkQueue _directQueue = VK_NULL_HANDLE;
+    
+    // Frame state
+    uint32_t _framesInFlight = 0;
+    uint32_t _currentFrameIndex = 0;
+    std::vector<VulkanFrameState> _frameStates = {};
+
+    // Window state
     VulkanWindowState _windowState = {};
 };
 
