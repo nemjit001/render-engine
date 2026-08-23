@@ -186,18 +186,16 @@ void RenderManager::Shutdown()
 void RenderManager::ProcessEvent(SDL_Event const& event)
 {
     if (event.type == SDL_EVENT_WINDOW_RESIZED && event.window.windowID == SDL_GetWindowID(_windowState.window)) {
-        OnWindowResize();
+        OnWindowResize(_windowState);
     }
-}
-
-void RenderManager::OnWindowResize()
-{
-    // Ensure all queued work is finished, ensuring any swapchain resources in-flight are no longer in use
-    WaitIdle();
-
-    // Reconfigure swapchain
-    if (!ConfigureSwapchain(_windowState, PREFERRED_SWAP_FORMAT, VK_PRESENT_MODE_FIFO_KHR)) {
-        spdlog::error("Failed to reconfigure Vulkan swapchain, continuing with outdated swapchain");
+    else if (event.type == SDL_EVENT_WINDOW_SHOWN && event.window.windowID == SDL_GetWindowID(_windowState.window)) {
+        OnWindowRestored(_windowState);
+    }
+    else if (event.type == SDL_EVENT_WINDOW_MINIMIZED && event.window.windowID == SDL_GetWindowID(_windowState.window)) {
+        OnWindowMinimized(_windowState);
+    }
+    else if (event.type == SDL_EVENT_WINDOW_RESTORED && event.window.windowID == SDL_GetWindowID(_windowState.window)) {
+        OnWindowRestored(_windowState);
     }
 }
 
@@ -261,6 +259,11 @@ void RenderManager::EndFrame()
 
     // Increment frame index
     _currentFrameIndex++;
+}
+
+void RenderManager::WaitIdle() const
+{
+    vkDeviceWaitIdle(_device);
 }
 
 bool RenderManager::CreateVulkanInstance()
@@ -955,6 +958,11 @@ void RenderManager::DestroySwapchainImageState(VulkanWindowState& windowState) c
 
 bool RenderManager::AcquireNextSwapchainImage(VulkanWindowState& windowState) const
 {
+    // If window is not visible we cannot acquire an image
+    if (!windowState.isVisible) {
+        return false;
+    }
+
     // Handle queued reconfigure of swapchain
     if (_windowState.reconfigureSwapchain)
     {
@@ -1011,7 +1019,23 @@ void RenderManager::Present(VulkanWindowState& windowState) const
     }
 }
 
-void RenderManager::WaitIdle() const
+void RenderManager::OnWindowResize(VulkanWindowState& windowState)
 {
-    vkDeviceWaitIdle(_device);
+    // Ensure all queued work is finished, ensuring any swapchain resources in-flight are no longer in use
+    WaitIdle();
+
+    // Reconfigure swapchain
+    if (!ConfigureSwapchain(windowState, PREFERRED_SWAP_FORMAT, VK_PRESENT_MODE_FIFO_KHR)) {
+        spdlog::error("Failed to reconfigure Vulkan swapchain, continuing with outdated swapchain");
+    }
+}
+
+void RenderManager::OnWindowMinimized(VulkanWindowState& windowState)
+{
+    windowState.isVisible = false;
+}
+
+void RenderManager::OnWindowRestored(VulkanWindowState& windowState)
+{
+    windowState.isVisible = true;
 }

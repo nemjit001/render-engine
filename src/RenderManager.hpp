@@ -50,9 +50,6 @@ public:
     /// @param event Event to process.
     void ProcessEvent(SDL_Event const& event);
 
-    /// @brief Handle a window resize event.
-    void OnWindowResize();
-
     /// @brief Start a new frame.
     /// @return A boolean indicating successful frame start.
     bool NewFrame();
@@ -122,8 +119,9 @@ private:
         std::vector<VkImageView> swapImageViews;
         std::vector<VkSemaphore> swapImageAcquiredSemaphores; //< Sized on frames in flight
         std::vector<VkSemaphore> swapImageReleasedSemaphores; //< Sized on swap image count
-        bool reconfigureSwapchain;
         uint32_t currentSwapImageIdx;
+        bool reconfigureSwapchain; //< Set this to 'true' to queue up a swapchain reconfigure
+        bool isVisible; //< Indicates if the window is visible and can be rendered to.
     };
 
 private:
@@ -197,6 +195,18 @@ private:
     /// @brief Present the last acquired swapchain image for a window state, may fatally exit if an unrecoverable error is encountered.
     /// @param windowState Window state to present for.
     void Present(VulkanWindowState& windowState) const;
+
+    /// @brief Handle a window resize event.
+    /// @param windowState Window state to handle resize event for.
+    void OnWindowResize(VulkanWindowState& windowState);
+
+    /// @brief Handle a window minimization event.
+    /// @param windowState Window state to handle minimization event for.
+    void OnWindowMinimized(VulkanWindowState& windowState);
+
+    /// @brief Handle a window restore event.
+    /// @param windowState Window state to handle restore event for.
+    void OnWindowRestored(VulkanWindowState& windowState);
 
 private:
     // Instance state
