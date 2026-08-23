@@ -208,6 +208,7 @@ private:
     VulkanPhysicalDeviceInfo _physicalDeviceInfo = {};
     VkDevice _device = VK_NULL_HANDLE;
     VkQueue _directQueue = VK_NULL_HANDLE;
+    VmaAllocator _allocator = VK_NULL_HANDLE;
     
     // Frame state
     uint64_t _framesInFlight = 0;

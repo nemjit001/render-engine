@@ -576,6 +576,27 @@ bool RenderManager::CreateVulkanDevice(VulkanPhysicalDeviceInfo const& physicalD
     volkLoadDevice(_device);
     vkGetDeviceQueue(_device, physicalDeviceInfo.directQueueFamily, 0, &_directQueue);
 
+    // Create VMA allocator
+    VmaAllocatorCreateInfo allocatorCreateInfo{};
+    allocatorCreateInfo.flags = VMA_ALLOCATOR_CREATE_BUFFER_DEVICE_ADDRESS_BIT
+        | VMA_ALLOCATOR_CREATE_EXT_MEMORY_BUDGET_BIT;
+    allocatorCreateInfo.vulkanApiVersion = TARGET_VULKAN_VERSION;
+    allocatorCreateInfo.instance = _instance;
+    allocatorCreateInfo.physicalDevice = _physicalDevice;
+    allocatorCreateInfo.device = _device;
+    allocatorCreateInfo.pVulkanFunctions = nullptr;
+
+    VmaVulkanFunctions vmaVulkanFunctions{};
+    vmaImportVulkanFunctionsFromVolk(&allocatorCreateInfo, &vmaVulkanFunctions);
+    allocatorCreateInfo.pVulkanFunctions = &vmaVulkanFunctions;
+
+    spdlog::trace("Creating VMA allocator");
+    if (VK_FAILED(vmaCreateAllocator(&allocatorCreateInfo, &_allocator)))
+    {
+        spdlog::error("Failed to create VMA allocator");
+        return false;
+    }
+
     return true;
 }
 
@@ -677,6 +698,7 @@ void RenderManager::DestroyVulkanDevice()
 {
     spdlog::trace("Cleaning up device state");
 
+    vmaDestroyAllocator(_allocator);
     vkDestroyDevice(_device, nullptr);
     _directQueue = VK_NULL_HANDLE;
     _physicalDeviceInfo = {};
