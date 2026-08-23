@@ -67,6 +67,15 @@ void Engine::ProcessEvent(SDL_Event const& event)
     }
 }
 
+void Engine::Frame()
+{
+    if (!gRenderManager->NewFrame()) {
+        return;
+    }
+
+    gRenderManager->EndFrame();
+}
+
 EngineResult Engine::Run()
 {
     // Initialize engine
@@ -78,7 +87,7 @@ EngineResult Engine::Run()
     while (gIsRunning)
     {
         PumpPlatformEvents();
-        gRenderManager->Frame();
+        Frame();
     }
 
     // Do cleanup

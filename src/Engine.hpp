@@ -31,6 +31,9 @@ private:
     /// @param event Event to process.
     void ProcessEvent(SDL_Event const& event);
 
+    /// @brief Render a frame for the engine.
+    void Frame();
+
 public:
     /// @brief Run the engine.
     /// @return An EngineResult.

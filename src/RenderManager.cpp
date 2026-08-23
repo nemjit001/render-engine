@@ -201,7 +201,7 @@ void RenderManager::OnWindowResize()
     }
 }
 
-void RenderManager::Frame()
+bool RenderManager::NewFrame()
 {
     // Wait for frame ready
     VulkanFrameState const& frameState = _frameStates[GetFrameInFlightIndex()];
@@ -211,12 +211,32 @@ void RenderManager::Frame()
 
     // Acquire swap image
     if (!AcquireNextSwapchainImage(_windowState)) {
-        return;
+        return false;
     }
 
-    // Reset frame fence for start of command recording
+    // Reset frame fence and start command recording
     if (VK_FAILED(vkResetFences(_device, 1, &frameState.frameReadyFence))) {
         FATAL_ERROR("Failed to reset fence for frame {}", _currentFrameIndex);
+    }
+
+    VkCommandBufferBeginInfo frameCommandsBeginInfo{};
+    frameCommandsBeginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+    frameCommandsBeginInfo.pNext = nullptr;
+    frameCommandsBeginInfo.flags = 0;
+    frameCommandsBeginInfo.pInheritanceInfo = nullptr;
+
+    if (VK_FAILED(vkBeginCommandBuffer(frameState.directCommandBuffer, &frameCommandsBeginInfo))) {
+        FATAL_ERROR("Failed to begin command recording for frame {}", _currentFrameIndex);
+    }
+
+    return true;
+}
+
+void RenderManager::EndFrame()
+{
+    VulkanFrameState const& frameState = _frameStates[GetFrameInFlightIndex()];
+    if (VK_FAILED(vkEndCommandBuffer(frameState.directCommandBuffer))) {
+        FATAL_ERROR("Failed to end command recording for frame {}", _currentFrameIndex);
     }
 
     // Submit frame commands
@@ -227,8 +247,8 @@ void RenderManager::Frame()
     submitInfo.waitSemaphoreCount = 1;
     submitInfo.pWaitDstStageMask = waitStages;
     submitInfo.pWaitSemaphores = &_windowState.swapImageAcquiredSemaphores[GetFrameInFlightIndex()];
-    submitInfo.commandBufferCount = 0;
-    submitInfo.pCommandBuffers = nullptr;
+    submitInfo.commandBufferCount = 1;
+    submitInfo.pCommandBuffers = &frameState.directCommandBuffer;
     submitInfo.signalSemaphoreCount = 1;
     submitInfo.pSignalSemaphores = &_windowState.swapImageReleasedSemaphores[_windowState.currentSwapImageIdx];
 

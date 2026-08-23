@@ -53,8 +53,23 @@ public:
     /// @brief Handle a window resize event.
     void OnWindowResize();
 
-    /// @brief Render a frame.
-    void Frame();
+    /// @brief Start a new frame.
+    /// @return A boolean indicating successful frame start.
+    bool NewFrame();
+
+    /// @brief End the current frame.
+    void EndFrame();
+
+    /// @brief Wait for the graphics device to be idle.
+    void WaitIdle() const;
+
+    /// @brief Get the current frame index.
+    /// @return The current frame index.
+    uint64_t GetCurrentFrameIndex() const { return _currentFrameIndex; }
+
+    /// @brief Get the current frame in flight index in the range [0, frames in flight].
+    /// @return The frame in flight index.
+    uint64_t GetFrameInFlightIndex() const { return GetCurrentFrameIndex() % _framesInFlight; }
 
     /// @brief Target Vulkan api version against which the application is written.
     static constexpr uint32_t TARGET_VULKAN_VERSION = VK_API_VERSION_1_3;
@@ -183,13 +198,6 @@ private:
     /// @param windowState Window state to present for.
     void Present(VulkanWindowState& windowState) const;
 
-    /// @brief Wait for the device to be idle.
-    void WaitIdle() const;
-
-    /// @brief Get the current frame in flight index in the range [0, frames in flight].
-    /// @return The frame in flight index.
-    uint32_t GetFrameInFlightIndex() const { return _currentFrameIndex % _framesInFlight; }
-
 private:
     // Instance state
     VkInstance _instance = VK_NULL_HANDLE;
@@ -202,8 +210,8 @@ private:
     VkQueue _directQueue = VK_NULL_HANDLE;
     
     // Frame state
-    uint32_t _framesInFlight = 0;
-    uint32_t _currentFrameIndex = 0;
+    uint64_t _framesInFlight = 0;
+    uint64_t _currentFrameIndex = 0;
     std::vector<VulkanFrameState> _frameStates = {};
 
     // Window state
