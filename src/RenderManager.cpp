@@ -958,8 +958,7 @@ bool RenderManager::AcquireNextSwapchainImage(VulkanWindowState& windowState) co
     // Handle queued reconfigure of swapchain
     if (_windowState.reconfigureSwapchain)
     {
-        // TODO(nemjit001): Cache active present mode
-        ConfigureSwapchain(windowState, PREFERRED_SWAP_FORMAT, VK_PRESENT_MODE_FIFO_KHR);
+        ConfigureSwapchain(windowState, PREFERRED_SWAP_FORMAT, _windowState.swapchainConfig.presentMode);
         return false;
     }
 
