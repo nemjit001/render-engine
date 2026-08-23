@@ -19,6 +19,7 @@ target_sources(RenderEngine
         src/main.cpp
         src/Engine.cpp
         src/Engine.hpp
+        src/FatalError.hpp
         src/RenderManager.cpp
         src/RenderManager.hpp
         src/UseVulkanLibs.cpp

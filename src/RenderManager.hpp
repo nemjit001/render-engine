@@ -107,6 +107,7 @@ private:
         std::vector<VkImageView> swapImageViews;
         std::vector<VkSemaphore> swapImageAcquiredSemaphores; //< Sized on frames in flight
         std::vector<VkSemaphore> swapImageReleasedSemaphores; //< Sized on swap image count
+        bool reconfigureSwapchain;
         uint32_t currentSwapImageIdx;
     };
 
@@ -172,6 +173,18 @@ private:
     /// @brief Destroy the Vulkan swapchain image state.
     /// @param windowState WindowState to destroy image state for.
     void DestroySwapchainImageState(VulkanWindowState& windowState) const;
+
+    /// @brief Acquire the next swapchain image for a window state, may fatally exit if an unrecoverable error is encountered.
+    /// @param windowState Window state to acquire swap image for.
+    /// @return A boolean indicating success.
+    bool AcquireNextSwapchainImage(VulkanWindowState& windowState) const;
+
+    /// @brief Present the last acquired swapchain image for a window state, may fatally exit if an unrecoverable error is encountered.
+    /// @param windowState Window state to present for.
+    void Present(VulkanWindowState& windowState) const;
+
+    /// @brief Wait for the device to be idle.
+    void WaitIdle() const;
 
     /// @brief Get the current frame in flight index in the range [0, frames in flight].
     /// @return The frame in flight index.

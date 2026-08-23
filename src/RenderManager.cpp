@@ -2,6 +2,7 @@
 
 #include <spdlog/spdlog.h>
 #include <SDL3/SDL_vulkan.h>
+#include "FatalError.hpp"
 
 #define VK_SUCCEEDED(result)    (result == VK_SUCCESS)
 #define VK_FAILED(result)       (result != VK_SUCCESS)
@@ -170,6 +171,8 @@ bool RenderManager::Init(RenderManagerInitInfo const& initInfo)
 
 void RenderManager::Shutdown()
 {
+    WaitIdle();
+
     DestroyVulkanWindowState();
     DestroyVulkanFrameState();
     DestroyVulkanDevice();
@@ -190,7 +193,7 @@ void RenderManager::ProcessEvent(SDL_Event const& event)
 void RenderManager::OnWindowResize()
 {
     // Ensure all queued work is finished, ensuring any swapchain resources in-flight are no longer in use
-    vkDeviceWaitIdle(_device);
+    WaitIdle();
 
     // Reconfigure swapchain
     if (!ConfigureSwapchain(_windowState, PREFERRED_SWAP_FORMAT, VK_PRESENT_MODE_FIFO_KHR)) {
@@ -200,7 +203,44 @@ void RenderManager::OnWindowResize()
 
 void RenderManager::Frame()
 {
-    //
+    // Wait for frame ready
+    VulkanFrameState const& frameState = _frameStates[GetFrameInFlightIndex()];
+    if (VK_FAILED(vkWaitForFences(_device, 1, &frameState.frameReadyFence, VK_TRUE, UINT64_MAX))) {
+        FATAL_ERROR("Failed to wait on fence for frame {}", _currentFrameIndex);
+    }
+
+    // Acquire swap image
+    if (!AcquireNextSwapchainImage(_windowState)) {
+        return;
+    }
+
+    // Reset frame fence for start of command recording
+    if (VK_FAILED(vkResetFences(_device, 1, &frameState.frameReadyFence))) {
+        FATAL_ERROR("Failed to reset fence for frame {}", _currentFrameIndex);
+    }
+
+    // Submit frame commands
+    VkPipelineStageFlags const waitStages[] = { VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT };
+    VkSubmitInfo submitInfo{};
+    submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+    submitInfo.pNext = nullptr;
+    submitInfo.waitSemaphoreCount = 1;
+    submitInfo.pWaitDstStageMask = waitStages;
+    submitInfo.pWaitSemaphores = &_windowState.swapImageAcquiredSemaphores[GetFrameInFlightIndex()];
+    submitInfo.commandBufferCount = 0;
+    submitInfo.pCommandBuffers = nullptr;
+    submitInfo.signalSemaphoreCount = 1;
+    submitInfo.pSignalSemaphores = &_windowState.swapImageReleasedSemaphores[_windowState.currentSwapImageIdx];
+
+    if (VK_FAILED(vkQueueSubmit(_directQueue, 1, &submitInfo, frameState.frameReadyFence))) {
+        FATAL_ERROR("Failed to submit frame commands for frame {}", _currentFrameIndex);
+    }
+
+    // Present frame
+    Present(_windowState);
+
+    // Increment frame index
+    _currentFrameIndex++;
 }
 
 bool RenderManager::CreateVulkanInstance()
@@ -848,6 +888,7 @@ bool RenderManager::ConfigureSwapchain(VulkanWindowState& windowState, VkFormat 
     windowState.swapImageAcquiredSemaphores = swapImageAcquiredSemaphores;
     windowState.swapImageReleasedSemaphores = swapImageReleasedSemaphores;
     windowState.currentSwapImageIdx = 0;
+    windowState.reconfigureSwapchain = false;
     return true;
 }
 
@@ -868,4 +909,68 @@ void RenderManager::DestroySwapchainImageState(VulkanWindowState& windowState) c
     windowState.swapImageViews.clear();
     windowState.swapImages.clear();
     windowState.swapchainConfig = {};
+}
+
+bool RenderManager::AcquireNextSwapchainImage(VulkanWindowState& windowState) const
+{
+    // Handle queued reconfigure of swapchain
+    if (_windowState.reconfigureSwapchain)
+    {
+        // TODO(nemjit001): Cache active present mode
+        ConfigureSwapchain(windowState, PREFERRED_SWAP_FORMAT, VK_PRESENT_MODE_FIFO_KHR);
+        return false;
+    }
+
+    // Acquire swap image for window
+    VkResult const acquireResult = vkAcquireNextImageKHR(
+        _device,
+        windowState.swapchain,
+        UINT64_MAX,
+        windowState.swapImageAcquiredSemaphores[GetFrameInFlightIndex()],
+        VK_NULL_HANDLE,
+        &windowState.currentSwapImageIdx
+    );
+    if (VK_FAILED(acquireResult))
+    {
+        if (acquireResult == VK_SUBOPTIMAL_KHR || acquireResult == VK_ERROR_OUT_OF_DATE_KHR) {
+            windowState.reconfigureSwapchain = true;
+        }
+        else {
+            FATAL_ERROR("Failed to acquire Vulkan swapchain image for frame {} (result: {})", _currentFrameIndex, static_cast<uint32_t>(acquireResult));
+        }
+
+        return false;
+    }
+
+    return true;
+}
+
+void RenderManager::Present(VulkanWindowState& windowState) const
+{
+    // Present swap image to window
+    VkPresentInfoKHR presentInfo{};
+    presentInfo.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
+    presentInfo.pNext = nullptr;
+    presentInfo.waitSemaphoreCount = 1;
+    presentInfo.pWaitSemaphores = &windowState.swapImageReleasedSemaphores[windowState.currentSwapImageIdx];
+    presentInfo.swapchainCount = 1;
+    presentInfo.pSwapchains = &windowState.swapchain;
+    presentInfo.pImageIndices = &windowState.currentSwapImageIdx;
+    presentInfo.pResults = nullptr;
+
+    VkResult const presentResult = vkQueuePresentKHR(_directQueue, &presentInfo);
+    if (VK_FAILED(presentResult))
+    {
+        if (presentResult == VK_SUBOPTIMAL_KHR || presentResult == VK_ERROR_OUT_OF_DATE_KHR) {
+            windowState.reconfigureSwapchain = true;
+        }
+        else {
+            FATAL_ERROR("Failed to present Vulkan swapchain image {} for frame {} (result: {})", windowState.currentSwapImageIdx, _currentFrameIndex, static_cast<uint32_t>(presentResult));
+        }
+    }
+}
+
+void RenderManager::WaitIdle() const
+{
+    vkDeviceWaitIdle(_device);
 }
