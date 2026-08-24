@@ -57,6 +57,9 @@ public:
     /// @brief End the current frame.
     void EndFrame();
 
+    /// @brief Execute the frame commands for the current frame.
+    void ExecuteFrame() const;
+
     /// @brief Wait for the graphics device to be idle.
     void WaitIdle() const;
 

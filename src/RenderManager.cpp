@@ -261,6 +261,38 @@ void RenderManager::EndFrame()
     _currentFrameIndex++;
 }
 
+void RenderManager::ExecuteFrame() const
+{
+    VulkanFrameState const frameState = _frameStates[GetFrameInFlightIndex()];
+    
+    // Transition swap image to present layout
+    VkImageMemoryBarrier2 swapPresentBarrier{};
+    swapPresentBarrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
+    swapPresentBarrier.pNext = nullptr;
+    swapPresentBarrier.srcStageMask = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT;
+    swapPresentBarrier.srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+    swapPresentBarrier.dstStageMask = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT;
+    swapPresentBarrier.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_READ_BIT;
+    swapPresentBarrier.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+    swapPresentBarrier.newLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
+    swapPresentBarrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+    swapPresentBarrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+    swapPresentBarrier.image = _windowState.swapImages[_windowState.currentSwapImageIdx];
+    swapPresentBarrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+    swapPresentBarrier.subresourceRange.baseArrayLayer = 0;
+    swapPresentBarrier.subresourceRange.layerCount = 1;
+    swapPresentBarrier.subresourceRange.baseMipLevel = 0;
+    swapPresentBarrier.subresourceRange.levelCount = 1;
+
+    VkDependencyInfo presentDependency{};
+    presentDependency.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO;
+    presentDependency.pNext = nullptr;
+    presentDependency.imageMemoryBarrierCount = 1;
+    presentDependency.pImageMemoryBarriers = &swapPresentBarrier;
+
+    vkCmdPipelineBarrier2(frameState.directCommandBuffer, &presentDependency);
+}
+
 void RenderManager::WaitIdle() const
 {
     vkDeviceWaitIdle(_device);
@@ -546,7 +578,7 @@ bool RenderManager::CreateVulkanDevice(VulkanPhysicalDeviceInfo const& physicalD
     // Set up enabled features pNext chain
     _physicalDeviceInfo.enabledDeviceFeatures.pNext = &_physicalDeviceInfo.enabledVulkan11Features;
     _physicalDeviceInfo.enabledVulkan11Features.pNext = &_physicalDeviceInfo.enabledVulkan12Features;
-    _physicalDeviceInfo.enabledVulkan13Features.pNext = &_physicalDeviceInfo.enabledVulkan13Features;
+    _physicalDeviceInfo.enabledVulkan12Features.pNext = &_physicalDeviceInfo.enabledVulkan13Features;
     _physicalDeviceInfo.enabledVulkan13Features.pNext = nullptr;
 
     // Create device queues
@@ -555,7 +587,7 @@ bool RenderManager::CreateVulkanDevice(VulkanPhysicalDeviceInfo const& physicalD
     directQueueCreateInfo.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
     directQueueCreateInfo.pNext = nullptr;
     directQueueCreateInfo.flags = 0;
-    directQueueCreateInfo.queueFamilyIndex = physicalDeviceInfo.directQueueFamily;
+    directQueueCreateInfo.queueFamilyIndex = _physicalDeviceInfo.directQueueFamily;
     directQueueCreateInfo.queueCount = 1;
     directQueueCreateInfo.pQueuePriorities = queuePriorities;
 
@@ -577,7 +609,7 @@ bool RenderManager::CreateVulkanDevice(VulkanPhysicalDeviceInfo const& physicalD
         return false;
     }
     volkLoadDevice(_device);
-    vkGetDeviceQueue(_device, physicalDeviceInfo.directQueueFamily, 0, &_directQueue);
+    vkGetDeviceQueue(_device, _physicalDeviceInfo.directQueueFamily, 0, &_directQueue);
 
     // Create VMA allocator
     VmaAllocatorCreateInfo allocatorCreateInfo{};

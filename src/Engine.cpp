@@ -73,6 +73,7 @@ void Engine::Frame()
         return;
     }
 
+    gRenderManager->ExecuteFrame();
     gRenderManager->EndFrame();
 }
 
