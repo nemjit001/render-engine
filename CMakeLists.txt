@@ -18,11 +18,16 @@ target_sources(RenderEngine
     PRIVATE
         src/main.cpp
         src/Engine.cpp
+        src/RenderManagers/Vulkan/VulkanRenderManager.cpp
+        src/RenderManagers/Vulkan/UseVulkanLibs.cpp
+    PRIVATE
+    FILE_SET HEADERS
+    BASE_DIRS src/
+    FILES
         src/Engine.hpp
         src/FatalError.hpp
-        src/RenderManager.cpp
         src/RenderManager.hpp
-        src/UseVulkanLibs.cpp
+        src/RenderManagers/Vulkan/VulkanRenderManager.hpp
 )
 target_compile_features(RenderEngine
     PRIVATE

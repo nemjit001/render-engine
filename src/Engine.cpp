@@ -1,7 +1,7 @@
 #include "Engine.hpp"
 
 #include <spdlog/spdlog.h>
-#include "RenderManager.hpp"
+#include "RenderManagers/Vulkan/VulkanRenderManager.hpp"
 
 bool Engine::gIsRunning = false;
 std::shared_ptr<IRenderManager> Engine::gRenderManager = nullptr;
