@@ -2,9 +2,10 @@
 #ifndef ENGINE_HPP
 #define ENGINE_HPP
 
+#include <memory>
 #include <SDL3/SDL.h>
 
-class RenderManager;
+class IRenderManager;
 
 /// @brief Enumeration of EngineResult result codes.
 enum EngineResult : int
@@ -41,7 +42,7 @@ public:
 
 private:
     static bool gIsRunning;
-    static RenderManager* gRenderManager;
+    static std::shared_ptr<IRenderManager> gRenderManager;
 };
 
 #endif //ENGINE_HPP

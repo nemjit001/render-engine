@@ -90,13 +90,7 @@ static bool TryEnableExtension(std::vector<char const*>& enabledExtensionNames, 
     return false;
 }
 
-RenderManager& RenderManager::Get()
-{
-    static RenderManager instance{};
-    return instance;
-}
-
-bool RenderManager::Init(RenderManagerInitInfo const& initInfo)
+bool VulkanRenderManager::Init(RenderManagerInitInfo const& initInfo)
 {
     // Load Vulkan symbols
     {
@@ -169,7 +163,7 @@ bool RenderManager::Init(RenderManagerInitInfo const& initInfo)
     return true;
 }
 
-void RenderManager::Shutdown()
+void VulkanRenderManager::Shutdown()
 {
     WaitIdle();
 
@@ -183,7 +177,7 @@ void RenderManager::Shutdown()
     volkFinalize();
 }
 
-void RenderManager::ProcessEvent(SDL_Event const& event)
+void VulkanRenderManager::ProcessEvent(SDL_Event const& event)
 {
     if (event.type == SDL_EVENT_WINDOW_RESIZED && event.window.windowID == SDL_GetWindowID(_windowState.window)) {
         OnWindowResize(_windowState);
@@ -199,10 +193,10 @@ void RenderManager::ProcessEvent(SDL_Event const& event)
     }
 }
 
-bool RenderManager::NewFrame()
+bool VulkanRenderManager::NewFrame()
 {
     // Wait for frame ready
-    VulkanFrameState const& frameState = _frameStates[GetFrameInFlightIndex()];
+    VulkanFrameState const& frameState = _frameStates[GetCurrentFrameInFlightIndex()];
     if (VK_FAILED(vkWaitForFences(_device, 1, &frameState.frameReadyFence, VK_TRUE, UINT64_MAX))) {
         FATAL_ERROR("Failed to wait on fence for frame {}", _currentFrameIndex);
     }
@@ -230,9 +224,9 @@ bool RenderManager::NewFrame()
     return true;
 }
 
-void RenderManager::EndFrame()
+void VulkanRenderManager::EndFrame()
 {
-    VulkanFrameState const& frameState = _frameStates[GetFrameInFlightIndex()];
+    VulkanFrameState const& frameState = _frameStates[GetCurrentFrameInFlightIndex()];
     if (VK_FAILED(vkEndCommandBuffer(frameState.directCommandBuffer))) {
         FATAL_ERROR("Failed to end command recording for frame {}", _currentFrameIndex);
     }
@@ -244,7 +238,7 @@ void RenderManager::EndFrame()
     submitInfo.pNext = nullptr;
     submitInfo.waitSemaphoreCount = 1;
     submitInfo.pWaitDstStageMask = waitStages;
-    submitInfo.pWaitSemaphores = &_windowState.swapImageAcquiredSemaphores[GetFrameInFlightIndex()];
+    submitInfo.pWaitSemaphores = &_windowState.swapImageAcquiredSemaphores[GetCurrentFrameInFlightIndex()];
     submitInfo.commandBufferCount = 1;
     submitInfo.pCommandBuffers = &frameState.directCommandBuffer;
     submitInfo.signalSemaphoreCount = 1;
@@ -261,9 +255,9 @@ void RenderManager::EndFrame()
     _currentFrameIndex++;
 }
 
-void RenderManager::ExecuteFrame() const
+void VulkanRenderManager::ExecuteFrame() const
 {
-    VulkanFrameState const frameState = _frameStates[GetFrameInFlightIndex()];
+    VulkanFrameState const frameState = _frameStates[GetCurrentFrameInFlightIndex()];
     
     // Transition swap image to present layout
     VkImageMemoryBarrier2 swapPresentBarrier{};
@@ -293,12 +287,12 @@ void RenderManager::ExecuteFrame() const
     vkCmdPipelineBarrier2(frameState.directCommandBuffer, &presentDependency);
 }
 
-void RenderManager::WaitIdle() const
+void VulkanRenderManager::WaitIdle() const
 {
     vkDeviceWaitIdle(_device);
 }
 
-bool RenderManager::CreateVulkanInstance()
+bool VulkanRenderManager::CreateVulkanInstance()
 {
     // Get instance layers and extensions
     std::vector<VkLayerProperties> const availableInstanceLayers = []() {
@@ -407,18 +401,18 @@ bool RenderManager::CreateVulkanInstance()
     return true;
 }
 
-std::vector<RenderManager::VulkanPhysicalDeviceInfo> RenderManager::FindPhysicalDevices(VkInstance instance)
+std::vector<VulkanRenderManager::VulkanPhysicalDeviceInfo> VulkanRenderManager::FindPhysicalDevices(VkInstance instance)
 {
     spdlog::trace("Searching for supported Vulkan physical devices");
 
     // Get available physical devices
-    std::vector<VkPhysicalDevice> const availablePhysicalDevices = [](VkInstance instance) {
+    std::vector<VkPhysicalDevice> const availablePhysicalDevices = [&instance]() {
         uint32_t deviceCount = 0;
         vkEnumeratePhysicalDevices(instance, &deviceCount, nullptr);
         std::vector<VkPhysicalDevice> availableDevices(deviceCount);
         vkEnumeratePhysicalDevices(instance, &deviceCount, availableDevices.data());
         return availableDevices;
-    }(instance);
+    }();
 
     // Gather physical device info
     std::vector<VulkanPhysicalDeviceInfo> physicalDeviceInfos{};
@@ -453,13 +447,13 @@ std::vector<RenderManager::VulkanPhysicalDeviceInfo> RenderManager::FindPhysical
         vkGetPhysicalDeviceFeatures2(physicalDevice, &availableDeviceFeatures);
 
         // Get device queue families
-        std::vector<VkQueueFamilyProperties> const queueFamilies = [](VkPhysicalDevice physicalDevice) {
+        std::vector<VkQueueFamilyProperties> const queueFamilies = [&physicalDevice]() {
             uint32_t queueCount = 0;
             vkGetPhysicalDeviceQueueFamilyProperties(physicalDevice, &queueCount, nullptr);
-            std::vector<VkQueueFamilyProperties> queueFamilies(queueCount);
-            vkGetPhysicalDeviceQueueFamilyProperties(physicalDevice, &queueCount, queueFamilies.data());
-            return queueFamilies;
-        }(physicalDevice);
+            std::vector<VkQueueFamilyProperties> queueFamilyProperties(queueCount);
+            vkGetPhysicalDeviceQueueFamilyProperties(physicalDevice, &queueCount, queueFamilyProperties.data());
+            return queueFamilyProperties;
+        }();
 
         // Check device support and enable required features
         bool isDeviceSupported = true; // Assume the device is supported until found otherwise
@@ -505,7 +499,7 @@ std::vector<RenderManager::VulkanPhysicalDeviceInfo> RenderManager::FindPhysical
         }
 
         // Search for required device queue families
-        auto const findQueueFamily = [&queueFamilies](VkInstance instance, VkPhysicalDevice physicalDevice, VkQueueFlags requiredFlags, VkQueueFlags ignoredFlags, bool requireSurfaceSupport) {
+        auto const findQueueFamily = [&instance, &physicalDevice, &queueFamilies](VkQueueFlags requiredFlags, VkQueueFlags ignoredFlags, bool requireSurfaceSupport) {
             for (uint32_t queueIdx = 0; queueIdx < queueFamilies.size(); queueIdx++)
             {
                 VkQueueFamilyProperties const& queueProps = queueFamilies[queueIdx];
@@ -521,7 +515,7 @@ std::vector<RenderManager::VulkanPhysicalDeviceInfo> RenderManager::FindPhysical
             return VK_QUEUE_FAMILY_IGNORED;
         };
 
-        uint32_t const directQueueFamily = findQueueFamily(_instance, physicalDevice, VK_QUEUE_GRAPHICS_BIT | VK_QUEUE_COMPUTE_BIT | VK_QUEUE_TRANSFER_BIT, 0, true);
+        uint32_t const directQueueFamily = findQueueFamily(VK_QUEUE_GRAPHICS_BIT | VK_QUEUE_COMPUTE_BIT | VK_QUEUE_TRANSFER_BIT, 0, true);
         if (directQueueFamily == VK_QUEUE_FAMILY_IGNORED)
         {
             spdlog::warn("Physical device {} ({}) does not support the required device queues, skipping device",
@@ -548,7 +542,7 @@ std::vector<RenderManager::VulkanPhysicalDeviceInfo> RenderManager::FindPhysical
     return physicalDeviceInfos;
 }
 
-bool RenderManager::CreateVulkanDevice(VulkanPhysicalDeviceInfo const& physicalDeviceInfo)
+bool VulkanRenderManager::CreateVulkanDevice(VulkanPhysicalDeviceInfo const& physicalDeviceInfo)
 {
     _physicalDevice = physicalDeviceInfo.physicalDevice;
     _physicalDeviceInfo = physicalDeviceInfo;
@@ -635,7 +629,7 @@ bool RenderManager::CreateVulkanDevice(VulkanPhysicalDeviceInfo const& physicalD
     return true;
 }
 
-bool RenderManager::CreateVulkanFrameState(uint32_t framesInFlight)
+bool VulkanRenderManager::CreateVulkanFrameState(uint32_t framesInFlight)
 {
     _framesInFlight = framesInFlight;
     if (framesInFlight == 0 || framesInFlight > 3)
@@ -687,7 +681,7 @@ bool RenderManager::CreateVulkanFrameState(uint32_t framesInFlight)
     return true;
 }
 
-bool RenderManager::CreateVulkanWindowState(char const* title, uint32_t width, uint32_t height)
+bool VulkanRenderManager::CreateVulkanWindowState(char const* title, uint32_t width, uint32_t height)
 {
     // Create window
     spdlog::trace("Creating window");
@@ -719,7 +713,7 @@ bool RenderManager::CreateVulkanWindowState(char const* title, uint32_t width, u
     return true;
 }
 
-void RenderManager::DestroyVulkanInstance()
+void VulkanRenderManager::DestroyVulkanInstance()
 {
     spdlog::trace("Cleaning up instance state");
 
@@ -729,7 +723,7 @@ void RenderManager::DestroyVulkanInstance()
     vkDestroyInstance(_instance, nullptr);
 }
 
-void RenderManager::DestroyVulkanDevice()
+void VulkanRenderManager::DestroyVulkanDevice()
 {
     spdlog::trace("Cleaning up device state");
 
@@ -740,7 +734,7 @@ void RenderManager::DestroyVulkanDevice()
     _physicalDevice = VK_NULL_HANDLE;
 }
 
-void RenderManager::DestroyVulkanFrameState()
+void VulkanRenderManager::DestroyVulkanFrameState()
 {
     spdlog::trace("Cleaning up frame state");
 
@@ -755,7 +749,7 @@ void RenderManager::DestroyVulkanFrameState()
     _framesInFlight = 0;
 }
 
-void RenderManager::DestroyVulkanWindowState()
+void VulkanRenderManager::DestroyVulkanWindowState()
 {
     spdlog::trace("Cleaning up window state");
 
@@ -766,7 +760,7 @@ void RenderManager::DestroyVulkanWindowState()
     _windowState = VulkanWindowState{};
 }
 
-RenderManager::VulkanSwapchainConfig RenderManager::GetVulkanSwapchainConfiguration(
+VulkanRenderManager::VulkanSwapchainConfig VulkanRenderManager::GetVulkanSwapchainConfiguration(
     SDL_Window* window,
     VkSurfaceKHR surface,
     VkFormat preferredSurfaceFormat,
@@ -782,20 +776,20 @@ RenderManager::VulkanSwapchainConfig RenderManager::GetVulkanSwapchainConfigurat
     vkGetPhysicalDeviceSurfaceCapabilitiesKHR(_physicalDevice, surface, &surfaceCapabilities);
 
     // Get surface formats and present modes
-    std::vector<VkSurfaceFormatKHR> const availableSurfaceFormats = [](VkPhysicalDevice physicalDevice, VkSurfaceKHR surface) {
+    std::vector<VkSurfaceFormatKHR> const availableSurfaceFormats = [this, &surface]() {
         uint32_t surfaceFormatCount = 0;
-        vkGetPhysicalDeviceSurfaceFormatsKHR(physicalDevice, surface, &surfaceFormatCount, nullptr);
+        vkGetPhysicalDeviceSurfaceFormatsKHR(_physicalDevice, surface, &surfaceFormatCount, nullptr);
         std::vector<VkSurfaceFormatKHR> surfaceFormats(surfaceFormatCount);
-        vkGetPhysicalDeviceSurfaceFormatsKHR(physicalDevice, surface, &surfaceFormatCount, surfaceFormats.data());
+        vkGetPhysicalDeviceSurfaceFormatsKHR(_physicalDevice, surface, &surfaceFormatCount, surfaceFormats.data());
         return surfaceFormats;
-    }(_physicalDevice, surface);
-    std::vector<VkPresentModeKHR> const availablePresentModes = [](VkPhysicalDevice physicalDevice, VkSurfaceKHR surface) {
+    }();
+    std::vector<VkPresentModeKHR> const availablePresentModes = [this, &surface]() {
         uint32_t presentModeCount = 0;
-        vkGetPhysicalDeviceSurfacePresentModesKHR(physicalDevice, surface, &presentModeCount, nullptr);
+        vkGetPhysicalDeviceSurfacePresentModesKHR(_physicalDevice, surface, &presentModeCount, nullptr);
         std::vector<VkPresentModeKHR> presentModes(presentModeCount);
-        vkGetPhysicalDeviceSurfacePresentModesKHR(physicalDevice, surface, &presentModeCount, presentModes.data());
+        vkGetPhysicalDeviceSurfacePresentModesKHR(_physicalDevice, surface, &presentModeCount, presentModes.data());
         return presentModes;
-    }(_physicalDevice, surface);
+    }();
 
     // Find surface configuration that matches requirements
     uint32_t const preferredImageCount = surfaceCapabilities.minImageCount + 1;
@@ -814,10 +808,10 @@ RenderManager::VulkanSwapchainConfig RenderManager::GetVulkanSwapchainConfigurat
     }();
 
     VkPresentModeKHR const presentMode = [&availablePresentModes, &preferredPresentMode]() {
-        for (auto const& presentMode : availablePresentModes)
+        for (auto const& availablePresentMode : availablePresentModes)
         {
-            if (presentMode == preferredPresentMode) {
-                return presentMode;
+            if (availablePresentMode == preferredPresentMode) {
+                return availablePresentMode;
             }
         }
 
@@ -834,7 +828,7 @@ RenderManager::VulkanSwapchainConfig RenderManager::GetVulkanSwapchainConfigurat
     };
 }
 
-bool RenderManager::ConfigureSwapchain(VulkanWindowState& windowState, VkFormat preferredFormat, VkPresentModeKHR preferredPresentMode) const
+bool VulkanRenderManager::ConfigureSwapchain(VulkanWindowState& windowState, VkFormat preferredFormat, VkPresentModeKHR preferredPresentMode) const
 {
     spdlog::trace("Configuring Vulkan swapchain");
     VkSwapchainKHR oldSwapchain = windowState.swapchain;
@@ -873,13 +867,13 @@ bool RenderManager::ConfigureSwapchain(VulkanWindowState& windowState, VkFormat 
 
     // Get swapchain images
     spdlog::trace("Creating Vulkan swapchain images");
-    std::vector<VkImage> const swapImages = [](VkDevice device, VkSwapchainKHR swapchain) {
+    std::vector<VkImage> const swapImages = [this, &swapchain]() {
         uint32_t imageCount = 0;
-        vkGetSwapchainImagesKHR(device, swapchain, &imageCount, nullptr);
-        std::vector<VkImage> swapImages(imageCount);
-        vkGetSwapchainImagesKHR(device, swapchain, &imageCount, swapImages.data());
-        return swapImages;
-    }(_device, swapchain);
+        vkGetSwapchainImagesKHR(_device, swapchain, &imageCount, nullptr);
+        std::vector<VkImage> swapchainImages(imageCount);
+        vkGetSwapchainImagesKHR(_device, swapchain, &imageCount, swapchainImages.data());
+        return swapchainImages;
+    }();
 
     // Create swapchain image views
     spdlog::trace("Creating Vulkan swapchain image views");
@@ -969,7 +963,7 @@ bool RenderManager::ConfigureSwapchain(VulkanWindowState& windowState, VkFormat 
     return true;
 }
 
-void RenderManager::DestroySwapchainImageState(VulkanWindowState& windowState) const
+void VulkanRenderManager::DestroySwapchainImageState(VulkanWindowState& windowState) const
 {
     for (auto const& semaphore : windowState.swapImageAcquiredSemaphores) {
         vkDestroySemaphore(_device, semaphore, nullptr);
@@ -988,7 +982,7 @@ void RenderManager::DestroySwapchainImageState(VulkanWindowState& windowState) c
     windowState.swapchainConfig = {};
 }
 
-bool RenderManager::AcquireNextSwapchainImage(VulkanWindowState& windowState) const
+bool VulkanRenderManager::AcquireNextSwapchainImage(VulkanWindowState& windowState) const
 {
     // If window is not visible we cannot acquire an image
     if (!windowState.isVisible) {
@@ -1007,7 +1001,7 @@ bool RenderManager::AcquireNextSwapchainImage(VulkanWindowState& windowState) co
         _device,
         windowState.swapchain,
         UINT64_MAX,
-        windowState.swapImageAcquiredSemaphores[GetFrameInFlightIndex()],
+        windowState.swapImageAcquiredSemaphores[GetCurrentFrameInFlightIndex()],
         VK_NULL_HANDLE,
         &windowState.currentSwapImageIdx
     );
@@ -1026,7 +1020,7 @@ bool RenderManager::AcquireNextSwapchainImage(VulkanWindowState& windowState) co
     return true;
 }
 
-void RenderManager::Present(VulkanWindowState& windowState) const
+void VulkanRenderManager::Present(VulkanWindowState& windowState) const
 {
     // Present swap image to window
     VkPresentInfoKHR presentInfo{};
@@ -1051,7 +1045,7 @@ void RenderManager::Present(VulkanWindowState& windowState) const
     }
 }
 
-void RenderManager::OnWindowResize(VulkanWindowState& windowState)
+void VulkanRenderManager::OnWindowResize(VulkanWindowState& windowState)
 {
     // Ensure all queued work is finished, ensuring any swapchain resources in-flight are no longer in use
     WaitIdle();
@@ -1062,12 +1056,12 @@ void RenderManager::OnWindowResize(VulkanWindowState& windowState)
     }
 }
 
-void RenderManager::OnWindowMinimized(VulkanWindowState& windowState)
+void VulkanRenderManager::OnWindowMinimized(VulkanWindowState& windowState)
 {
     windowState.isVisible = false;
 }
 
-void RenderManager::OnWindowRestored(VulkanWindowState& windowState)
+void VulkanRenderManager::OnWindowRestored(VulkanWindowState& windowState)
 {
     windowState.isVisible = true;
 }

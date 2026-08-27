@@ -4,7 +4,7 @@
 #include "RenderManager.hpp"
 
 bool Engine::gIsRunning = false;
-RenderManager* Engine::gRenderManager = nullptr;
+std::shared_ptr<IRenderManager> Engine::gRenderManager = nullptr;
 
 bool Engine::Init()
 {
@@ -25,7 +25,7 @@ bool Engine::Init()
     renderManagerInitInfo.windowHeight = 720u;
     renderManagerInitInfo.framesInFlight = 2u;
 
-    gRenderManager = &RenderManager::Get();
+    gRenderManager = std::make_shared<VulkanRenderManager>();
     if (!gRenderManager->Init(renderManagerInitInfo))
     {
         spdlog::error("Failed to initialize render manager");
@@ -43,6 +43,7 @@ void Engine::Shutdown()
 
     spdlog::info("Shutting down render manager");
     gRenderManager->Shutdown();
+    gRenderManager.reset();
 
     spdlog::info("Shutting down window system");
     SDL_Quit();

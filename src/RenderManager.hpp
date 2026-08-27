@@ -22,54 +22,73 @@ struct RenderManagerInitInfo
     uint32_t framesInFlight = 2u;       //< Number of frames that may be recorded simultaneously, lower values means lower frame latency, values in the range [1, 3] are recommended.
 };
 
-/// @brief The RenderManager manages render resources and frame submission.
-class RenderManager
+/// @brief The RenderManager interface for managing render resources and frame submission can be implemented to support different render backends.
+class IRenderManager
 {
-private:
-    RenderManager() = default;
-
 public:
-    ~RenderManager() = default;
+    IRenderManager() = default;
+    virtual ~IRenderManager() = default;
 
-    RenderManager(RenderManager const&) = delete;
-    RenderManager& operator=(RenderManager const&) = delete;
-
-    /// @brief Get the render manager instance.
-    /// @return The render manager instance.
-    [[nodiscard]] static RenderManager& Get();
+    IRenderManager(IRenderManager const&) = delete;
+    IRenderManager& operator=(IRenderManager const&) = delete;
 
     /// @brief Initialize the render manager.
     /// @param initInfo Initialization info.
     /// @return A boolean indicating success.
-    [[nodiscard]] bool Init(RenderManagerInitInfo const& initInfo);
+    [[nodiscard]]
+    virtual bool Init(RenderManagerInitInfo const& initInfo) = 0;
 
     /// @brief Shut down the render manager.
-    void Shutdown();
+    virtual void Shutdown() = 0;
 
     /// @brief Process a platform event.
     /// @param event Event to process.
-    void ProcessEvent(SDL_Event const& event);
+    virtual void ProcessEvent(SDL_Event const& event) = 0;
 
     /// @brief Start a new frame.
     /// @return A boolean indicating successful frame start.
-    bool NewFrame();
+    [[nodiscard]]
+    virtual bool NewFrame() = 0;
 
     /// @brief End the current frame.
-    void EndFrame();
+    virtual void EndFrame() = 0;
 
     /// @brief Execute the frame commands for the current frame.
-    void ExecuteFrame() const;
+    virtual void ExecuteFrame() const = 0;
 
     /// @brief Wait for the graphics device to be idle.
-    void WaitIdle() const;
+    virtual void WaitIdle() const = 0;
 
     /// @brief Get the current frame index.
     /// @return The current frame index.
-    uint64_t GetCurrentFrameIndex() const { return _currentFrameIndex; }
-
+    virtual uint64_t GetCurrentFrameIndex() const = 0;
+    
     /// @brief Get the current frame in flight index in the range [0, frames in flight].
     /// @return The frame in flight index.
-    uint64_t GetFrameInFlightIndex() const { return GetCurrentFrameIndex() % _framesInFlight; }
+    virtual uint64_t GetCurrentFrameInFlightIndex() const = 0;
+};
+
+/// @brief Vulkan implementation for the RenderManager interface.
+class VulkanRenderManager : public IRenderManager
+{
+public:
+    virtual bool Init(RenderManagerInitInfo const& initInfo) override final;
+
+    virtual void Shutdown() override final;
+
+    virtual void ProcessEvent(SDL_Event const& event) override final;
+
+    virtual bool NewFrame() override final;
+
+    virtual void EndFrame() override final;
+
+    virtual void ExecuteFrame() const override final;
+
+    virtual void WaitIdle() const override final;
+
+    virtual uint64_t GetCurrentFrameIndex() const override final { return _currentFrameIndex; }
+
+    virtual uint64_t GetCurrentFrameInFlightIndex() const override final { return GetCurrentFrameIndex() % _framesInFlight; }
 
     /// @brief Target Vulkan api version against which the application is written.
     static constexpr uint32_t TARGET_VULKAN_VERSION = VK_API_VERSION_1_3;
