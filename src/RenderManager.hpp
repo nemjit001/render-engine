@@ -2,6 +2,9 @@
 #ifndef RENDER_MANAGER_HPP
 #define RENDER_MANAGER_HPP
 
+#include <cstdint>
+#include <SDL3/SDL.h>
+
 #ifndef NDEBUG
 static constexpr bool RENDERER_ENABLE_DEBUG = true;
 #else
@@ -56,10 +59,12 @@ public:
 
     /// @brief Get the current frame index.
     /// @return The current frame index.
+    [[nodiscard]]
     virtual uint64_t GetCurrentFrameIndex() const = 0;
     
     /// @brief Get the current frame in flight index in the range [0, frames in flight].
     /// @return The frame in flight index.
+    [[nodiscard]]
     virtual uint64_t GetCurrentFrameInFlightIndex() const = 0;
 };
 

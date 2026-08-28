@@ -3,7 +3,6 @@
 #define VULKAN_RENDER_MANAGER_HPP
 
 #include <vector>
-#include <SDL3/SDL.h>
 #include <volk.h>
 #include <vk_mem_alloc.h>
 #include "RenderManager.hpp"
