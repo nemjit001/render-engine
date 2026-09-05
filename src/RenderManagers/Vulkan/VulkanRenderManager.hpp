@@ -11,23 +11,22 @@
 class VulkanRenderManager : public IRenderManager
 {
 public:
-    virtual bool Init(RenderManagerInitInfo const& initInfo) override final;
+    bool Init(RenderManagerInitInfo const& initInfo) override;
+    void Shutdown() override;
+    void ProcessEvent(SDL_Event const& event) override;
 
-    virtual void Shutdown() override final;
+    [[nodiscard]] GPUBufferHandle CreateGPUBuffer(GPUBufferDesc const& bufferDesc) override;
+    [[nodiscard]] GPUTextureHandle CreateGPUTexture(GPUTextureDesc const& textureDesc) override;
+    void DestroyGPUBuffer(GPUBufferHandle buffer) override;
+    void DestroyGPUTexture(GPUTextureHandle texture) override;
 
-    virtual void ProcessEvent(SDL_Event const& event) override final;
+    bool NewFrame() override;
+    void EndFrame() override;
+    void ExecuteFrame() const override;
+    void WaitIdle() const override;
 
-    virtual bool NewFrame() override final;
-
-    virtual void EndFrame() override final;
-
-    virtual void ExecuteFrame() const override final;
-
-    virtual void WaitIdle() const override final;
-
-    virtual uint64_t GetCurrentFrameIndex() const override final { return _currentFrameIndex; }
-
-    virtual uint64_t GetCurrentFrameInFlightIndex() const override final { return GetCurrentFrameIndex() % _framesInFlight; }
+    [[nodiscard]] uint64_t GetCurrentFrameIndex() const override { return _currentFrameIndex; }
+    [[nodiscard]] uint64_t GetCurrentFrameInFlightIndex() const override { return GetCurrentFrameIndex() % _framesInFlight; }
 
     /// @brief Target Vulkan api version against which the application is written.
     static constexpr uint32_t TARGET_VULKAN_VERSION = VK_API_VERSION_1_3;

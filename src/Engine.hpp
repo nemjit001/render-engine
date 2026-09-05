@@ -43,7 +43,7 @@ public:
 
 private:
     static bool gIsRunning;
-    static std::shared_ptr<IRenderManager> gRenderManager;
+    static std::unique_ptr<IRenderManager> gRenderManager;
 };
 
 #endif //ENGINE_HPP

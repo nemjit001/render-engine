@@ -18,9 +18,12 @@ target_sources(RenderEngine
     PRIVATE
         src/main.cpp
         src/Engine.cpp
-        src/RenderManagers/Vulkan/VulkanRenderManager.cpp
+        src/RenderManagers/RenderTypes.hpp
         src/RenderManagers/Vulkan/UseVulkanLibs.cpp
-    PRIVATE
+        src/RenderManagers/Vulkan/VulkanRenderManager.cpp
+        src/RenderManagers/Vulkan/VulkanRenderTypes.cpp
+        src/RenderManagers/Vulkan/VulkanRenderTypes.hpp
+    PUBLIC
     FILE_SET HEADERS
     BASE_DIRS src/
     FILES

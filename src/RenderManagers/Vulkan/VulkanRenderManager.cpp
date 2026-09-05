@@ -1,8 +1,10 @@
 #include "VulkanRenderManager.hpp"
 
+#include <cassert>
 #include <spdlog/spdlog.h>
 #include <SDL3/SDL_vulkan.h>
 #include "FatalError.hpp"
+#include "VulkanRenderTypes.hpp"
 
 #define VK_SUCCEEDED(result)    (result == VK_SUCCESS)
 #define VK_FAILED(result)       (result != VK_SUCCESS)
@@ -88,6 +90,76 @@ static bool TryEnableExtension(std::vector<char const*>& enabledExtensionNames, 
     }
     
     return false;
+}
+
+/// @brief Get the Vulkan buffer usage flag bits based on the set BufferUsageFlags.
+/// @param usage Usage flags.
+/// @return The Vulkan buffer usage flags.
+static VkBufferUsageFlags GetVulkanBufferUsageFlags(BufferUsageFlags const usage)
+{
+    VkBufferUsageFlags outUsage = 0;
+    if (IsBitFlagSet(usage, BufferUsage_TransferSrc)) {
+        outUsage |= VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
+    }
+
+    if (IsBitFlagSet(usage, BufferUsage_TransferDst)) {
+        outUsage |= VK_BUFFER_USAGE_TRANSFER_DST_BIT;
+    }
+
+    if (IsBitFlagSet(usage, BufferUsage_UniformBuffer)) {
+        outUsage |= VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT;
+    }
+
+    if (IsBitFlagSet(usage, BufferUsage_StorageBuffer)) {
+        outUsage |= VK_BUFFER_USAGE_STORAGE_BUFFER_BIT;
+    }
+
+    if (IsBitFlagSet(usage, BufferUsage_IndexBuffer)) {
+        outUsage |= VK_BUFFER_USAGE_INDEX_BUFFER_BIT;
+    }
+
+    if (IsBitFlagSet(usage, BufferUsage_VertexBuffer)) {
+        outUsage |= VK_BUFFER_USAGE_VERTEX_BUFFER_BIT;
+    }
+
+    if (IsBitFlagSet(usage, BufferUsage_IndirectBuffer)) {
+        outUsage |= VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT;
+    }
+
+    return outUsage | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT; // Always enable buffer device address queries
+}
+
+/// @brief Get the Vulkan image usage flag bits based on the set TextureUsageFlags.
+/// @param usage Usage flags.
+/// @return The Vulkan image usage flags.
+static VkImageUsageFlags GetVulkanImageUsageFlags(TextureUsageFlags const usage)
+{
+    VkImageUsageFlags outUsage = 0;
+    if (IsBitFlagSet(usage, TextureUsage_TransferSrc)) {
+        outUsage |= VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
+    }
+
+    if (IsBitFlagSet(usage, TextureUsage_TransferDst)) {
+        outUsage |= VK_IMAGE_USAGE_TRANSFER_DST_BIT;
+    }
+
+    if (IsBitFlagSet(usage, TextureUsage_SampledImage)) {
+        outUsage |= VK_IMAGE_USAGE_SAMPLED_BIT;
+    }
+
+    if (IsBitFlagSet(usage, TextureUsage_StorageImage)) {
+        outUsage |= VK_IMAGE_USAGE_STORAGE_BIT;
+    }
+
+    if (IsBitFlagSet(usage, TextureUsage_RenderAttachment)) {
+        outUsage |= VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
+    }
+
+    if (IsBitFlagSet(usage, TextureUsage_DepthStencilAttachment)) {
+        outUsage |= VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT;
+    }
+
+    return outUsage;
 }
 
 bool VulkanRenderManager::Init(RenderManagerInitInfo const& initInfo)
@@ -190,6 +262,124 @@ void VulkanRenderManager::ProcessEvent(SDL_Event const& event)
     }
     else if (event.type == SDL_EVENT_WINDOW_RESTORED && event.window.windowID == SDL_GetWindowID(_windowState.window)) {
         OnWindowRestored(_windowState);
+    }
+}
+
+GPUBufferHandle VulkanRenderManager::CreateGPUBuffer(GPUBufferDesc const& bufferDesc)
+{
+    VkBufferCreateInfo bufferCreateInfo{};
+    bufferCreateInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+    bufferCreateInfo.pNext = nullptr;
+    bufferCreateInfo.flags = 0;
+    bufferCreateInfo.size = bufferDesc.size;
+    bufferCreateInfo.usage = GetVulkanBufferUsageFlags(bufferDesc.usage);
+    bufferCreateInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+    bufferCreateInfo.queueFamilyIndexCount = 0;
+    bufferCreateInfo.pQueueFamilyIndices = nullptr;
+
+    VmaAllocationCreateInfo allocationCreateInfo{};
+    allocationCreateInfo.flags = 0;
+    allocationCreateInfo.usage = VMA_MEMORY_USAGE_AUTO;
+    allocationCreateInfo.requiredFlags = 0;
+    allocationCreateInfo.preferredFlags = 0;
+
+    VkBuffer buffer = VK_NULL_HANDLE;
+    VmaAllocation allocation = VK_NULL_HANDLE;
+    if (VK_FAILED(vmaCreateBuffer(_allocator, &bufferCreateInfo, &allocationCreateInfo, &buffer, &allocation, nullptr)))
+    {
+        spdlog::error("Failed to create buffer or allocation");
+        return nullptr;
+    }
+
+    return new VulkanBuffer(buffer, allocation);
+}
+
+GPUTextureHandle VulkanRenderManager::CreateGPUTexture(GPUTextureDesc const& textureDesc)
+{
+    assert(textureDesc.sampleCount == 0 && "Texture sampler count is 0!");
+    assert((textureDesc.sampleCount & (textureDesc.sampleCount - 1)) == 0 && "Texture sample count is not a power of 2!");
+
+    uint32_t const imageDepth = textureDesc.depthOrLayers;
+    uint32_t const imageLayers = 1;
+
+    VkImageCreateInfo imageCreateInfo{};
+    imageCreateInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
+    imageCreateInfo.pNext = nullptr;
+    imageCreateInfo.flags = 0;
+    imageCreateInfo.imageType = VK_IMAGE_TYPE_1D; // TODO(nemjit001): Add image type LUT
+    imageCreateInfo.format = VK_FORMAT_UNDEFINED; // TODO(nemjit001): Add format LUT
+    imageCreateInfo.extent.width = textureDesc.width;
+    imageCreateInfo.extent.height = textureDesc.height;
+    imageCreateInfo.extent.depth = imageDepth;
+    imageCreateInfo.mipLevels = textureDesc.mipLevels;
+    imageCreateInfo.arrayLayers = imageLayers;
+    imageCreateInfo.samples = static_cast<VkSampleCountFlagBits>(textureDesc.sampleCount);
+    imageCreateInfo.tiling = VK_IMAGE_TILING_OPTIMAL;
+    imageCreateInfo.usage = GetVulkanImageUsageFlags(textureDesc.usage);
+    imageCreateInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+    imageCreateInfo.queueFamilyIndexCount = 0;
+    imageCreateInfo.pQueueFamilyIndices = nullptr;
+    imageCreateInfo.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+
+    VmaAllocationCreateInfo allocationCreateInfo{};
+    allocationCreateInfo.flags = 0;
+    allocationCreateInfo.usage = VMA_MEMORY_USAGE_AUTO;
+    allocationCreateInfo.requiredFlags = 0;
+    allocationCreateInfo.preferredFlags = 0;
+
+    VkImage image = VK_NULL_HANDLE;
+    VmaAllocation allocation = VK_NULL_HANDLE;
+    if (VK_FAILED(vmaCreateImage(_allocator, &imageCreateInfo, &allocationCreateInfo, &image, &allocation, nullptr)))
+    {
+        spdlog::error("Failed to create image or allocation");
+        return nullptr;
+    }
+
+    VkImageViewCreateInfo viewCreateInfo{};
+    viewCreateInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+    viewCreateInfo.pNext = nullptr;
+    viewCreateInfo.flags = 0;
+    viewCreateInfo.image = image;
+    viewCreateInfo.viewType = VK_IMAGE_VIEW_TYPE_1D; // TODO(nemjit001): Add view type LUT
+    viewCreateInfo.format = VK_FORMAT_UNDEFINED; // TODO(nemjit001): Reuse image format
+    viewCreateInfo.components.r = VK_COMPONENT_SWIZZLE_IDENTITY;
+    viewCreateInfo.components.g = VK_COMPONENT_SWIZZLE_IDENTITY;
+    viewCreateInfo.components.b = VK_COMPONENT_SWIZZLE_IDENTITY;
+    viewCreateInfo.components.a = VK_COMPONENT_SWIZZLE_IDENTITY;
+    viewCreateInfo.subresourceRange.aspectMask = 0;
+    viewCreateInfo.subresourceRange.baseArrayLayer = 0;
+    viewCreateInfo.subresourceRange.layerCount = VK_REMAINING_ARRAY_LAYERS;
+    viewCreateInfo.subresourceRange.baseMipLevel = 0;
+    viewCreateInfo.subresourceRange.levelCount = VK_REMAINING_MIP_LEVELS;
+
+    VkImageView view = VK_NULL_HANDLE;
+    if (VK_FAILED(vkCreateImageView(_device, &viewCreateInfo, nullptr, &view)))
+    {
+        vmaDestroyImage(_allocator, image, allocation);
+        spdlog::error("Failed to create texture view");
+        return nullptr;
+    }
+
+    return new VulkanTexture(image, view, allocation);
+}
+
+void VulkanRenderManager::DestroyGPUBuffer(GPUBufferHandle buffer)
+{
+    if (buffer->GetRenderBackend() == RenderBackend::Vulkan)
+    {
+        auto* vulkanBuffer = static_cast<VulkanBuffer*>(buffer);
+        vulkanBuffer->DestroyResources(_device, _allocator);
+        delete buffer;
+    }
+}
+
+void VulkanRenderManager::DestroyGPUTexture(GPUTextureHandle texture)
+{
+    if (texture->GetRenderBackend() == RenderBackend::Vulkan)
+    {
+        auto* vulkanTexture = static_cast<VulkanTexture*>(texture);
+        vulkanTexture->DestroyResources(_device, _allocator);
+        delete texture;
     }
 }
 
