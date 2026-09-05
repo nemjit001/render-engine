@@ -25,6 +25,32 @@ enum GPUHeapType : uint32_t
     GPUHeapType_Readback    = 2,
 };
 
+/// @brief Enumeration of texture types.
+enum TextureType : uint32_t
+{
+    TextureType_1D  = 0,
+    TextureType_2D  = 1,
+    TextureType_3D  = 2,
+};
+
+/// @brief Enumeration of texture view types.
+enum TextureViewType : uint32_t
+{
+    TextureViewType_1D          = 0,
+    TextureViewType_2D          = 1,
+    TextureViewType_3D          = 2,
+    TextureViewType_Cube        = 3,
+    TextureViewType_1DArray     = 4,
+    TextureViewType_2DArray     = 5,
+    TextureViewType_CubeArray   = 6,
+};
+
+/// @brief Enumration of texture formats.
+enum TextureFormat : uint32_t
+{
+    TextureFormat_Undefined = 0,
+};
+
 /// @brief Enumeration of buffer usage flag bits.
 enum BufferUsageFlagBits : uint32_t
 {
@@ -70,13 +96,16 @@ struct GPUBufferDesc
 /// @brief GPU texture description.
 struct GPUTextureDesc
 {
-    GPUHeapType heapType    = GPUHeapType_Default;
-    uint32_t width          = 0u;
-    uint32_t height         = 0u;
-    uint32_t depthOrLayers  = 0u;
-    uint32_t mipLevels      = 0u;
-    uint32_t sampleCount    = 1u;
-    TextureUsageFlags usage = 0u;
+    GPUHeapType heapType            = GPUHeapType_Default;
+    TextureType textureType         = TextureType_1D;
+    TextureViewType textureViewType = TextureViewType_1D;
+    TextureFormat format            = TextureFormat_Undefined;
+    uint32_t width                  = 0u;
+    uint32_t height                 = 0u;
+    uint32_t depthOrLayers          = 0u;
+    uint32_t mipLevels              = 0u;
+    uint32_t sampleCount            = 1u;
+    TextureUsageFlags usage         = 0u;
 };
 
 /// @brief The RenderManager interface for managing render resources and frame submission can be implemented to support different render backends.
@@ -146,7 +175,7 @@ public:
 template<typename FlagType, typename BitFlagType>
 static constexpr bool IsBitFlagSet(FlagType flags, BitFlagType bit)
 {
-    return flags & bit;
+    return (flags & bit) != 0;
 }
 
 #endif //RENDER_MANAGER_HPP

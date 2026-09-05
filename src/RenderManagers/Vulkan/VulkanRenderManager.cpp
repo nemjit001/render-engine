@@ -9,6 +9,29 @@
 #define VK_SUCCEEDED(result)    (result == VK_SUCCESS)
 #define VK_FAILED(result)       (result != VK_SUCCESS)
 
+/// @brief LUT for matching TextureType to Vulkan image type.
+static constexpr VkImageType VulkanImageTypeLUT[] = {
+    VK_IMAGE_TYPE_1D,
+    VK_IMAGE_TYPE_2D,
+    VK_IMAGE_TYPE_3D,
+};
+
+/// @brief LUT for matching TextureViewType to Vulkan image view type.
+static constexpr VkImageViewType VulkanImageViewTypeLUT[] = {
+    VK_IMAGE_VIEW_TYPE_1D,
+    VK_IMAGE_VIEW_TYPE_2D,
+    VK_IMAGE_VIEW_TYPE_3D,
+    VK_IMAGE_VIEW_TYPE_CUBE,
+    VK_IMAGE_VIEW_TYPE_1D_ARRAY,
+    VK_IMAGE_VIEW_TYPE_2D_ARRAY,
+    VK_IMAGE_VIEW_TYPE_CUBE_ARRAY,
+};
+
+/// @brief LUT for matching TextureFormat to Vulkan format.
+static constexpr VkFormat VulkanImageFormatLUT[] = {
+    VK_FORMAT_UNDEFINED,
+};
+
 /// @brief Callback for handling Vulkan debug messages.
 /// @param messageSeverity 
 /// @param messageType 
@@ -299,15 +322,25 @@ GPUTextureHandle VulkanRenderManager::CreateGPUTexture(GPUTextureDesc const& tex
     assert(textureDesc.sampleCount == 0 && "Texture sampler count is 0!");
     assert((textureDesc.sampleCount & (textureDesc.sampleCount - 1)) == 0 && "Texture sample count is not a power of 2!");
 
-    uint32_t const imageDepth = textureDesc.depthOrLayers;
-    uint32_t const imageLayers = 1;
+    // Set additional image flags
+    uint32_t imageFlags = 0;
+    if (textureDesc.textureViewType == TextureViewType_Cube || textureDesc.textureViewType == TextureViewType_CubeArray) {
+        imageFlags |= VK_IMAGE_CREATE_CUBE_COMPATIBLE_BIT;
+    }
+
+    // Set image depth or layers according to texture type
+    uint32_t imageDepth = 1;
+    uint32_t imageLayers = textureDesc.depthOrLayers;
+    if (textureDesc.textureType == TextureType_3D) {
+        std::swap(imageDepth, imageLayers); // Use image depth with 3D texture types
+    }
 
     VkImageCreateInfo imageCreateInfo{};
     imageCreateInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
     imageCreateInfo.pNext = nullptr;
-    imageCreateInfo.flags = 0;
-    imageCreateInfo.imageType = VK_IMAGE_TYPE_1D; // TODO(nemjit001): Add image type LUT
-    imageCreateInfo.format = VK_FORMAT_UNDEFINED; // TODO(nemjit001): Add format LUT
+    imageCreateInfo.flags = imageFlags;
+    imageCreateInfo.imageType = VulkanImageTypeLUT[textureDesc.textureType];
+    imageCreateInfo.format = VulkanImageFormatLUT[textureDesc.format];
     imageCreateInfo.extent.width = textureDesc.width;
     imageCreateInfo.extent.height = textureDesc.height;
     imageCreateInfo.extent.depth = imageDepth;
@@ -322,7 +355,7 @@ GPUTextureHandle VulkanRenderManager::CreateGPUTexture(GPUTextureDesc const& tex
     imageCreateInfo.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
 
     VmaAllocationCreateInfo allocationCreateInfo{};
-    allocationCreateInfo.flags = 0;
+    allocationCreateInfo.flags = VMA_DEDICATED_ALLOCATION; // Require dedicated allocations for texture resources
     allocationCreateInfo.usage = VMA_MEMORY_USAGE_AUTO;
     allocationCreateInfo.requiredFlags = 0;
     allocationCreateInfo.preferredFlags = 0;
@@ -340,8 +373,8 @@ GPUTextureHandle VulkanRenderManager::CreateGPUTexture(GPUTextureDesc const& tex
     viewCreateInfo.pNext = nullptr;
     viewCreateInfo.flags = 0;
     viewCreateInfo.image = image;
-    viewCreateInfo.viewType = VK_IMAGE_VIEW_TYPE_1D; // TODO(nemjit001): Add view type LUT
-    viewCreateInfo.format = VK_FORMAT_UNDEFINED; // TODO(nemjit001): Reuse image format
+    viewCreateInfo.viewType = VulkanImageViewTypeLUT[textureDesc.textureViewType];
+    viewCreateInfo.format = VulkanImageFormatLUT[textureDesc.format];
     viewCreateInfo.components.r = VK_COMPONENT_SWIZZLE_IDENTITY;
     viewCreateInfo.components.g = VK_COMPONENT_SWIZZLE_IDENTITY;
     viewCreateInfo.components.b = VK_COMPONENT_SWIZZLE_IDENTITY;
