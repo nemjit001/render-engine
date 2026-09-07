@@ -3,6 +3,7 @@
 #define RENDER_MANAGER_HPP
 
 #include <cstdint>
+#include <memory>
 #include <SDL3/SDL.h>
 
 #ifndef NDEBUG
@@ -168,6 +169,10 @@ public:
 
     IRenderManager(IRenderManager const&) = delete;
     IRenderManager& operator=(IRenderManager const&) = delete;
+
+    /// @brief Factory method for attempting to create a render manager.
+    /// @return A new render manager.
+    static std::unique_ptr<IRenderManager> TryCreate();
 
     /// @brief Initialize the render manager.
     /// @param initInfo Initialization info.

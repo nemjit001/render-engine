@@ -1,7 +1,6 @@
 #include "Engine.hpp"
 
 #include <spdlog/spdlog.h>
-#include "RenderManagers/Vulkan/VulkanRenderManager.hpp"
 
 bool Engine::gIsRunning = false;
 std::unique_ptr<IRenderManager> Engine::gRenderManager = nullptr;
@@ -26,7 +25,7 @@ bool Engine::Init()
     renderManagerInitInfo.framesInFlight = 2u;
     renderManagerInitInfo.swapTextureFormat = TextureFormat_RGBA8_UNormSRGB;
 
-    gRenderManager = std::make_unique<VulkanRenderManager>();
+    gRenderManager = IRenderManager::TryCreate();
     if (!gRenderManager->Init(renderManagerInitInfo))
     {
         spdlog::error("Failed to initialize render manager");

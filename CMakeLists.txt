@@ -18,6 +18,7 @@ target_sources(RenderEngine
     PRIVATE
         src/main.cpp
         src/Engine.cpp
+        src/RenderManager.cpp
         src/RenderManagers/RenderTypes.hpp
         src/RenderManagers/Vulkan/UseVulkanLibs.cpp
         src/RenderManagers/Vulkan/VulkanRenderManager.cpp
