@@ -127,6 +127,15 @@ enum TextureUsageFlagBits : uint32_t
 };
 typedef uint32_t TextureUsageFlags;
 
+/// @brief Enumeration of texture aspect flag bits.
+enum TextureAspectFlagBits : uint32_t
+{
+    TextureAspect_Color     = 0x00000001,
+    TextureAspect_Depth     = 0x00000002,
+    TextureAspect_Stencil   = 0x00000004,
+};
+typedef uint32_t TextureAspectFlags;
+
 /// @brief Initialization info for the render manager.
 struct RenderManagerInitInfo
 {
@@ -158,6 +167,7 @@ struct GPUTextureDesc
     uint32_t mipLevels              = 0u;
     uint32_t sampleCount            = 1u;
     TextureUsageFlags usage         = 0u;
+    TextureAspectFlags aspectMask   = 0u;
 };
 
 /// @brief The RenderManager interface for managing render resources and frame submission can be implemented to support different render backends.

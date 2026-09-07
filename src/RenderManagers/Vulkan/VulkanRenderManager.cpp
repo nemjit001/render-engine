@@ -82,6 +82,97 @@ static constexpr VkFormat VulkanImageFormatLUT[] = {
     VK_FORMAT_D32_SFLOAT_S8_UINT,
 };
 
+/// @brief Get the Vulkan buffer usage flag bits based on the set BufferUsageFlags.
+/// @param usage Usage flags.
+/// @return The Vulkan buffer usage flags.
+static VkBufferUsageFlags GetVulkanBufferUsageFlags(BufferUsageFlags const usage)
+{
+    VkBufferUsageFlags outUsage = 0;
+    if (IsBitFlagSet(usage, BufferUsage_TransferSrc)) {
+        outUsage |= VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
+    }
+
+    if (IsBitFlagSet(usage, BufferUsage_TransferDst)) {
+        outUsage |= VK_BUFFER_USAGE_TRANSFER_DST_BIT;
+    }
+
+    if (IsBitFlagSet(usage, BufferUsage_UniformBuffer)) {
+        outUsage |= VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT;
+    }
+
+    if (IsBitFlagSet(usage, BufferUsage_StorageBuffer)) {
+        outUsage |= VK_BUFFER_USAGE_STORAGE_BUFFER_BIT;
+    }
+
+    if (IsBitFlagSet(usage, BufferUsage_IndexBuffer)) {
+        outUsage |= VK_BUFFER_USAGE_INDEX_BUFFER_BIT;
+    }
+
+    if (IsBitFlagSet(usage, BufferUsage_VertexBuffer)) {
+        outUsage |= VK_BUFFER_USAGE_VERTEX_BUFFER_BIT;
+    }
+
+    if (IsBitFlagSet(usage, BufferUsage_IndirectBuffer)) {
+        outUsage |= VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT;
+    }
+
+    return outUsage | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT; // Always enable buffer device address queries
+}
+
+/// @brief Get the Vulkan image usage flag bits based on the set TextureUsageFlags.
+/// @param usage Usage flags.
+/// @return The Vulkan image usage flags.
+static VkImageUsageFlags GetVulkanImageUsageFlags(TextureUsageFlags const usage)
+{
+    VkImageUsageFlags outUsage = 0;
+    if (IsBitFlagSet(usage, TextureUsage_TransferSrc)) {
+        outUsage |= VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
+    }
+
+    if (IsBitFlagSet(usage, TextureUsage_TransferDst)) {
+        outUsage |= VK_IMAGE_USAGE_TRANSFER_DST_BIT;
+    }
+
+    if (IsBitFlagSet(usage, TextureUsage_SampledImage)) {
+        outUsage |= VK_IMAGE_USAGE_SAMPLED_BIT;
+    }
+
+    if (IsBitFlagSet(usage, TextureUsage_StorageImage)) {
+        outUsage |= VK_IMAGE_USAGE_STORAGE_BIT;
+    }
+
+    if (IsBitFlagSet(usage, TextureUsage_RenderAttachment)) {
+        outUsage |= VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
+    }
+
+    if (IsBitFlagSet(usage, TextureUsage_DepthStencilAttachment)) {
+        outUsage |= VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT;
+    }
+
+    return outUsage;
+}
+
+/// @brief Get the Vulkan image aspect flag bits based on the set TextureAspectFlags.
+/// @param flags Aspect flags.
+/// @return The Vulkan image aspect flags.
+static VkImageAspectFlags GetVulkanImageAspectFlags(TextureAspectFlags const flags)
+{
+    VkImageAspectFlags outAspectMask = 0;
+    if (IsBitFlagSet(flags, TextureAspect_Color)) {
+        outAspectMask |= VK_IMAGE_ASPECT_COLOR_BIT;
+    }
+
+    if (IsBitFlagSet(flags, TextureAspect_Depth)) {
+        outAspectMask |= VK_IMAGE_ASPECT_DEPTH_BIT;
+    }
+
+    if (IsBitFlagSet(flags, TextureAspect_Stencil)) {
+        outAspectMask |= VK_IMAGE_ASPECT_STENCIL_BIT;
+    }
+
+    return outAspectMask;
+}
+
 /// @brief Callback for handling Vulkan debug messages.
 /// @param messageSeverity 
 /// @param messageType 
@@ -163,76 +254,6 @@ static bool TryEnableExtension(std::vector<char const*>& enabledExtensionNames, 
     }
     
     return false;
-}
-
-/// @brief Get the Vulkan buffer usage flag bits based on the set BufferUsageFlags.
-/// @param usage Usage flags.
-/// @return The Vulkan buffer usage flags.
-static VkBufferUsageFlags GetVulkanBufferUsageFlags(BufferUsageFlags const usage)
-{
-    VkBufferUsageFlags outUsage = 0;
-    if (IsBitFlagSet(usage, BufferUsage_TransferSrc)) {
-        outUsage |= VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
-    }
-
-    if (IsBitFlagSet(usage, BufferUsage_TransferDst)) {
-        outUsage |= VK_BUFFER_USAGE_TRANSFER_DST_BIT;
-    }
-
-    if (IsBitFlagSet(usage, BufferUsage_UniformBuffer)) {
-        outUsage |= VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT;
-    }
-
-    if (IsBitFlagSet(usage, BufferUsage_StorageBuffer)) {
-        outUsage |= VK_BUFFER_USAGE_STORAGE_BUFFER_BIT;
-    }
-
-    if (IsBitFlagSet(usage, BufferUsage_IndexBuffer)) {
-        outUsage |= VK_BUFFER_USAGE_INDEX_BUFFER_BIT;
-    }
-
-    if (IsBitFlagSet(usage, BufferUsage_VertexBuffer)) {
-        outUsage |= VK_BUFFER_USAGE_VERTEX_BUFFER_BIT;
-    }
-
-    if (IsBitFlagSet(usage, BufferUsage_IndirectBuffer)) {
-        outUsage |= VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT;
-    }
-
-    return outUsage | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT; // Always enable buffer device address queries
-}
-
-/// @brief Get the Vulkan image usage flag bits based on the set TextureUsageFlags.
-/// @param usage Usage flags.
-/// @return The Vulkan image usage flags.
-static VkImageUsageFlags GetVulkanImageUsageFlags(TextureUsageFlags const usage)
-{
-    VkImageUsageFlags outUsage = 0;
-    if (IsBitFlagSet(usage, TextureUsage_TransferSrc)) {
-        outUsage |= VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
-    }
-
-    if (IsBitFlagSet(usage, TextureUsage_TransferDst)) {
-        outUsage |= VK_IMAGE_USAGE_TRANSFER_DST_BIT;
-    }
-
-    if (IsBitFlagSet(usage, TextureUsage_SampledImage)) {
-        outUsage |= VK_IMAGE_USAGE_SAMPLED_BIT;
-    }
-
-    if (IsBitFlagSet(usage, TextureUsage_StorageImage)) {
-        outUsage |= VK_IMAGE_USAGE_STORAGE_BIT;
-    }
-
-    if (IsBitFlagSet(usage, TextureUsage_RenderAttachment)) {
-        outUsage |= VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
-    }
-
-    if (IsBitFlagSet(usage, TextureUsage_DepthStencilAttachment)) {
-        outUsage |= VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT;
-    }
-
-    return outUsage;
 }
 
 bool VulkanRenderManager::Init(RenderManagerInitInfo const& initInfo)
@@ -430,7 +451,7 @@ GPUTextureHandle VulkanRenderManager::CreateGPUTexture(GPUTextureDesc const& tex
     viewCreateInfo.components.g = VK_COMPONENT_SWIZZLE_IDENTITY;
     viewCreateInfo.components.b = VK_COMPONENT_SWIZZLE_IDENTITY;
     viewCreateInfo.components.a = VK_COMPONENT_SWIZZLE_IDENTITY;
-    viewCreateInfo.subresourceRange.aspectMask = 0;
+    viewCreateInfo.subresourceRange.aspectMask = GetVulkanImageAspectFlags(textureDesc.aspectMask);
     viewCreateInfo.subresourceRange.baseArrayLayer = 0;
     viewCreateInfo.subresourceRange.layerCount = VK_REMAINING_ARRAY_LAYERS;
     viewCreateInfo.subresourceRange.baseMipLevel = 0;
