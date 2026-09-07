@@ -30,6 +30,56 @@ static constexpr VkImageViewType VulkanImageViewTypeLUT[] = {
 /// @brief LUT for matching TextureFormat to Vulkan format.
 static constexpr VkFormat VulkanImageFormatLUT[] = {
     VK_FORMAT_UNDEFINED,
+
+    VK_FORMAT_R8_UNORM,
+    VK_FORMAT_R8_SNORM,
+    VK_FORMAT_R8_UINT,
+    VK_FORMAT_R8_SINT,
+
+    VK_FORMAT_R8G8_UNORM,
+    VK_FORMAT_R8G8_SNORM,
+    VK_FORMAT_R8G8_UINT,
+    VK_FORMAT_R8G8_SINT,
+
+    VK_FORMAT_R8G8B8A8_UNORM,
+    VK_FORMAT_R8G8B8A8_SRGB,
+    VK_FORMAT_R8G8B8A8_SNORM,
+    VK_FORMAT_R8G8B8A8_UINT,
+    VK_FORMAT_R8G8B8A8_SINT,
+
+    VK_FORMAT_B8G8R8A8_UNORM,
+    VK_FORMAT_B8G8R8A8_SRGB,
+
+    VK_FORMAT_R16_UINT,
+    VK_FORMAT_R16_SINT,
+    VK_FORMAT_R16_SFLOAT,
+
+    VK_FORMAT_R16G16_UINT,
+    VK_FORMAT_R16G16_SINT,
+    VK_FORMAT_R16G16_SFLOAT,
+
+    VK_FORMAT_R16G16B16A16_UINT,
+    VK_FORMAT_R16G16B16A16_SINT,
+    VK_FORMAT_R16G16B16A16_SFLOAT,
+
+    VK_FORMAT_R32_UINT,
+    VK_FORMAT_R32_SINT,
+    VK_FORMAT_R32_SFLOAT,
+
+    VK_FORMAT_R32G32_UINT,
+    VK_FORMAT_R32G32_SINT,
+    VK_FORMAT_R32G32_SFLOAT,
+
+    VK_FORMAT_R32G32B32A32_UINT,
+    VK_FORMAT_R32G32B32A32_SINT,
+    VK_FORMAT_R32G32B32A32_SFLOAT,
+
+    VK_FORMAT_S8_UINT,
+    VK_FORMAT_D16_UNORM,
+    VK_FORMAT_D24_UNORM_S8_UINT,
+    VK_FORMAT_D24_UNORM_S8_UINT,
+    VK_FORMAT_D32_SFLOAT,
+    VK_FORMAT_D32_SFLOAT_S8_UINT,
 };
 
 /// @brief Callback for handling Vulkan debug messages.
@@ -251,7 +301,7 @@ bool VulkanRenderManager::Init(RenderManagerInitInfo const& initInfo)
     }
 
     // Create the Vulkan window state
-    if (!CreateVulkanWindowState(initInfo.windowTitle, initInfo.windowWidth, initInfo.windowHeight)) {
+    if (!CreateVulkanWindowState(initInfo.windowTitle, initInfo.windowWidth, initInfo.windowHeight, initInfo.swapTextureFormat)) {
         return false;
     }
 
@@ -319,7 +369,8 @@ GPUBufferHandle VulkanRenderManager::CreateGPUBuffer(GPUBufferDesc const& buffer
 
 GPUTextureHandle VulkanRenderManager::CreateGPUTexture(GPUTextureDesc const& textureDesc)
 {
-    assert(textureDesc.sampleCount == 0 && "Texture sampler count is 0!");
+    assert(textureDesc.sampleCount == 0 && "Texture sample count is 0!");
+    assert(textureDesc.sampleCount <= 64 && "Texture sample count cannot be greater than 64!");
     assert((textureDesc.sampleCount & (textureDesc.sampleCount - 1)) == 0 && "Texture sample count is not a power of 2!");
 
     // Set additional image flags
@@ -904,7 +955,7 @@ bool VulkanRenderManager::CreateVulkanFrameState(uint32_t framesInFlight)
     return true;
 }
 
-bool VulkanRenderManager::CreateVulkanWindowState(char const* title, uint32_t width, uint32_t height)
+bool VulkanRenderManager::CreateVulkanWindowState(char const* title, uint32_t width, uint32_t height, TextureFormat preferredSwapFormat)
 {
     // Create window
     spdlog::trace("Creating window");
@@ -927,7 +978,7 @@ bool VulkanRenderManager::CreateVulkanWindowState(char const* title, uint32_t wi
     _windowState = VulkanWindowState{};
     _windowState.window = window;
     _windowState.surface = surface;
-    if (!ConfigureSwapchain(_windowState, PREFERRED_SWAP_FORMAT, VK_PRESENT_MODE_FIFO_KHR))
+    if (!ConfigureSwapchain(_windowState, preferredSwapFormat, VK_PRESENT_MODE_FIFO_KHR))
     {
         spdlog::error("Failed to configure Vulkan swapchain");
         return false;
@@ -986,7 +1037,7 @@ void VulkanRenderManager::DestroyVulkanWindowState()
 VulkanRenderManager::VulkanSwapchainConfig VulkanRenderManager::GetVulkanSwapchainConfiguration(
     SDL_Window* window,
     VkSurfaceKHR surface,
-    VkFormat preferredSurfaceFormat,
+    TextureFormat preferredSwapTextureFormat,
     VkPresentModeKHR preferredPresentMode
 ) const
 {
@@ -1018,16 +1069,16 @@ VulkanRenderManager::VulkanSwapchainConfig VulkanRenderManager::GetVulkanSwapcha
     uint32_t const preferredImageCount = surfaceCapabilities.minImageCount + 1;
     uint32_t const minImageCount = surfaceCapabilities.maxImageCount == 0 ? preferredImageCount : std::min(surfaceCapabilities.maxImageCount, preferredImageCount);
 
-    VkSurfaceFormatKHR const swapSurfaceFormat = [&availableSurfaceFormats, &preferredSurfaceFormat]() {
+    auto const [swapTextureFormat, swapSurfaceFormat] = [&availableSurfaceFormats, &preferredSwapTextureFormat]() -> std::pair<TextureFormat, VkSurfaceFormatKHR> {
         for (auto const& format : availableSurfaceFormats)
         {
-            if (format.format == preferredSurfaceFormat) {
-                return format;
+            if (format.format == VulkanImageFormatLUT[preferredSwapTextureFormat]) {
+                return std::make_pair(preferredSwapTextureFormat, format);
             }
         }
 
         // TODO(nemjit001): Add better fallback handling for unsupported surface formats
-        return availableSurfaceFormats[0]; // Return first available format
+        return std::make_pair(TextureFormat_Undefined, VkSurfaceFormatKHR{ VK_FORMAT_UNDEFINED, VK_COLOR_SPACE_SRGB_NONLINEAR_KHR });
     }();
 
     VkPresentModeKHR const presentMode = [&availablePresentModes, &preferredPresentMode]() {
@@ -1045,21 +1096,30 @@ VulkanRenderManager::VulkanSwapchainConfig VulkanRenderManager::GetVulkanSwapcha
         static_cast<uint32_t>(windowWidth),
         static_cast<uint32_t>(windowHeight),
         minImageCount,
+        swapTextureFormat,
         swapSurfaceFormat,
         presentMode,
         surfaceCapabilities.currentTransform,
     };
 }
 
-bool VulkanRenderManager::ConfigureSwapchain(VulkanWindowState& windowState, VkFormat preferredFormat, VkPresentModeKHR preferredPresentMode) const
+bool VulkanRenderManager::ConfigureSwapchain(VulkanWindowState& windowState, TextureFormat preferredFormat, VkPresentModeKHR preferredPresentMode) const
 {
     spdlog::trace("Configuring Vulkan swapchain");
     VkSwapchainKHR oldSwapchain = windowState.swapchain;
 
-    // Create swapchain
+    // Get swapchain configuration
     VulkanSwapchainConfig const swapchainConfig = GetVulkanSwapchainConfiguration(windowState.window, windowState.surface, preferredFormat, preferredPresentMode);
-    spdlog::trace("Swapchain extent: {}x{}", swapchainConfig.width, swapchainConfig.height);
+    spdlog::trace("Swapchain extent:      {}x{}", swapchainConfig.width, swapchainConfig.height);
+    spdlog::trace("Swapchain image count: {}", swapchainConfig.imageCount);
 
+    if (swapchainConfig.swapTextureFormat == TextureFormat_Undefined)
+    {
+        spdlog::error("Unsupported texture format provided for swapchain");
+        return false;
+    }
+
+    // Create swapchain
     VkSwapchainCreateInfoKHR swapchainCreateInfo{};
     swapchainCreateInfo.sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;
     swapchainCreateInfo.pNext = nullptr;
@@ -1215,7 +1275,7 @@ bool VulkanRenderManager::AcquireNextSwapchainImage(VulkanWindowState& windowSta
     // Handle queued reconfigure of swapchain
     if (_windowState.reconfigureSwapchain)
     {
-        ConfigureSwapchain(windowState, PREFERRED_SWAP_FORMAT, _windowState.swapchainConfig.presentMode);
+        ConfigureSwapchain(windowState, _windowState.swapchainConfig.swapTextureFormat, _windowState.swapchainConfig.presentMode);
         return false;
     }
 
@@ -1274,7 +1334,7 @@ void VulkanRenderManager::OnWindowResize(VulkanWindowState& windowState)
     WaitIdle();
 
     // Reconfigure swapchain
-    if (!ConfigureSwapchain(windowState, PREFERRED_SWAP_FORMAT, VK_PRESENT_MODE_FIFO_KHR)) {
+    if (!ConfigureSwapchain(windowState, _windowState.swapchainConfig.swapTextureFormat, VK_PRESENT_MODE_FIFO_KHR)) {
         spdlog::error("Failed to reconfigure Vulkan swapchain, continuing with outdated swapchain");
     }
 }

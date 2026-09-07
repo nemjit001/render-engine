@@ -14,7 +14,7 @@ static constexpr bool RENDERER_ENABLE_DEBUG = false;
 class GPUBuffer;
 class GPUTexture;
 
-typedef GPUBuffer* GPUBufferHandle;
+typedef GPUBuffer*  GPUBufferHandle;
 typedef GPUTexture* GPUTextureHandle;
 
 /// @brief Enumeration of GPU heap types.
@@ -48,7 +48,57 @@ enum TextureViewType : uint32_t
 /// @brief Enumration of texture formats.
 enum TextureFormat : uint32_t
 {
-    TextureFormat_Undefined = 0,
+    TextureFormat_Undefined         = 0,
+
+    TextureFormat_R8_UNorm          = 1,
+    TextureFormat_R8_SNorm          = 2,
+    TextureFormat_R8_UInt           = 3,
+    TextureFormat_R8_SInt           = 4,
+
+    TextureFormat_RG8_UNorm         = 5,
+    TextureFormat_RG8_SNorm         = 6,
+    TextureFormat_RG8_UInt          = 7,
+    TextureFormat_RG8_SInt          = 8,
+
+    TextureFormat_RGBA8_UNorm       = 9,
+    TextureFormat_RGBA8_UNormSRGB   = 10,
+    TextureFormat_RGBA8_SNorm       = 11,
+    TextureFormat_RGBA8_UInt        = 12,
+    TextureFormat_RGBA8_SInt        = 13,
+
+    TextureFormat_BGRA8_UNorm       = 14,
+    TextureFormat_BGRA8_UNormSRGB   = 15,
+
+    TextureFormat_R16_UInt          = 16,
+    TextureFormat_R16_SInt          = 17,
+    TextureFormat_R16_SFloat        = 18,
+
+    TextureFormat_RG16_UInt         = 19,
+    TextureFormat_RG16_SInt         = 20,
+    TextureFormat_RG16_SFloat       = 21,
+
+    TextureFormat_RGBA16_UInt       = 22,
+    TextureFormat_RGBA16_SInt       = 23,
+    TextureFormat_RGBA16_SFloat     = 24,
+
+    TextureFormat_R32_UInt          = 25,
+    TextureFormat_R32_SInt          = 26,
+    TextureFormat_R32_SFloat        = 27,
+
+    TextureFormat_RG32_UInt         = 28,
+    TextureFormat_RG32_SInt         = 29,
+    TextureFormat_RG32_SFloat       = 30,
+
+    TextureFormat_RGBA32_UInt       = 31,
+    TextureFormat_RGBA32_SInt       = 32,
+    TextureFormat_RGBA32_SFloat     = 33,
+
+    TextureFormat_S8                = 34,
+    TextureFormat_D16_UNorm         = 35,
+    TextureFormat_D24               = 36,
+    TextureFormat_D24_S8            = 37,
+    TextureFormat_D32_SFLoat        = 38,
+    TextureFormat_D32_SFLoat_S8     = 39,
 };
 
 /// @brief Enumeration of buffer usage flag bits.
@@ -79,10 +129,11 @@ typedef uint32_t TextureUsageFlags;
 /// @brief Initialization info for the render manager.
 struct RenderManagerInitInfo
 {
-    char const* windowTitle = "App";    //< Default window title.
-    uint32_t windowWidth    = 1280u;    //< Initial window width.
-    uint32_t windowHeight   = 720u;     //< Initial window height.
-    uint32_t framesInFlight = 2u;       //< Number of frames that may be recorded simultaneously, lower values means lower frame latency, values in the range [1, 3] are recommended.
+    char const* windowTitle         = "App";                            //< Default window title.
+    uint32_t windowWidth            = 1280u;                            //< Initial window width.
+    uint32_t windowHeight           = 720u;                             //< Initial window height.
+    uint32_t framesInFlight         = 2u;                               //< Number of frames that may be recorded simultaneously, lower values means lower frame latency, values in the range [1, 3] are recommended.
+    TextureFormat swapTextureFormat = TextureFormat_RGBA8_UNormSRGB;    //< Preferred swap chain texture format.
 };
 
 /// @brief GPU buffer description.
@@ -131,14 +182,24 @@ public:
     /// @param event Event to process.
     virtual void ProcessEvent(SDL_Event const& event) = 0;
 
+    /// @brief Create a GPU buffer.
+    /// @param bufferDesc Buffer description.
+    /// @return A new GPUBufferHandle.
     [[nodiscard]]
     virtual GPUBufferHandle CreateGPUBuffer(GPUBufferDesc const& bufferDesc) = 0;
 
+    /// @brief Create a GPU texture.
+    /// @param textureDesc Texture description.
+    /// @return A new GPUTextureHandle.
     [[nodiscard]]
     virtual GPUTextureHandle CreateGPUTexture(GPUTextureDesc const& textureDesc) = 0;
 
+    /// @brief Destroy a GPU buffer.
+    /// @param buffer Buffer to destroy.
     virtual void DestroyGPUBuffer(GPUBufferHandle buffer) = 0;
 
+    /// @brief Destroy a GPU texture.
+    /// @param texture Texture to destroy.
     virtual void DestroyGPUTexture(GPUTextureHandle texture) = 0;
 
     /// @brief Start a new frame.
@@ -154,6 +215,11 @@ public:
 
     /// @brief Wait for the graphics device to be idle.
     virtual void WaitIdle() const = 0;
+
+    /// @brief Get the swap texture format.
+    /// @return The swap texture format.
+    [[nodiscard]]
+    virtual TextureFormat GetSwapTextureFormat() const = 0;
 
     /// @brief Get the current frame index.
     /// @return The current frame index.

@@ -25,13 +25,12 @@ public:
     void ExecuteFrame() const override;
     void WaitIdle() const override;
 
+    [[nodiscard]] TextureFormat GetSwapTextureFormat() const override { return _windowState.swapchainConfig.swapTextureFormat; }
     [[nodiscard]] uint64_t GetCurrentFrameIndex() const override { return _currentFrameIndex; }
     [[nodiscard]] uint64_t GetCurrentFrameInFlightIndex() const override { return GetCurrentFrameIndex() % _framesInFlight; }
 
     /// @brief Target Vulkan api version against which the application is written.
     static constexpr uint32_t TARGET_VULKAN_VERSION = VK_API_VERSION_1_3;
-    /// @brief Preferred Vulkan swap surface format.
-    static constexpr VkFormat PREFERRED_SWAP_FORMAT = VK_FORMAT_R8G8B8A8_SRGB;
 
 private:
     /// @brief The VulkanPhysicalDeviceInfo struct is used to store a physical device and its related
@@ -63,6 +62,7 @@ private:
         uint32_t width;
         uint32_t height;
         uint32_t imageCount;
+        TextureFormat swapTextureFormat;
         VkSurfaceFormatKHR surfaceFormat;
         VkPresentModeKHR presentMode;
         VkSurfaceTransformFlagBitsKHR surfaceTransform;
@@ -108,8 +108,9 @@ private:
     /// @param title Window title.
     /// @param width Window width.
     /// @param height window height.
+    /// @param preferredSwapFormat preferred swap texture format.
     /// @return A boolean indicating success.
-    bool CreateVulkanWindowState(char const* title, uint32_t width, uint32_t height);
+    bool CreateVulkanWindowState(char const* title, uint32_t width, uint32_t height, TextureFormat preferredSwapFormat);
 
     /// @brief Destroy the Vulkan instance state.
     void DestroyVulkanInstance();
@@ -126,13 +127,13 @@ private:
     /// @brief Get the Vulkan swapchain configuration for a window and surface combination.
     /// @param window Window to query config for.
     /// @param surface Surface to query config for.
-    /// @param preferredSurfaceFormat Preferred swap surface format.
+    /// @param preferredSwapTextureFormat Preferred swap surface texture format.
     /// @param preferredPresentMode Preferred swap present mode.
     /// @return The swapchain configuration.
     VulkanSwapchainConfig GetVulkanSwapchainConfiguration(
         SDL_Window* window,
         VkSurfaceKHR surface,
-        VkFormat preferredSurfaceFormat,
+        TextureFormat preferredSwapTextureFormat,
         VkPresentModeKHR preferredPresentMode
     ) const;
 
@@ -141,7 +142,7 @@ private:
     /// @param preferredFormat Preferred surface format.
     /// @param preferredPresentMode Preferred present mode.
     /// @return A boolean indicating success.
-    bool ConfigureSwapchain(VulkanWindowState& windowState, VkFormat preferredFormat, VkPresentModeKHR preferredPresentMode) const;
+    bool ConfigureSwapchain(VulkanWindowState& windowState, TextureFormat preferredFormat, VkPresentModeKHR preferredPresentMode) const;
 
     /// @brief Destroy the Vulkan swapchain image state.
     /// @param windowState WindowState to destroy image state for.

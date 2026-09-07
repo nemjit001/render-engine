@@ -24,6 +24,7 @@ bool Engine::Init()
     renderManagerInitInfo.windowWidth = 1280u;
     renderManagerInitInfo.windowHeight = 720u;
     renderManagerInitInfo.framesInFlight = 2u;
+    renderManagerInitInfo.swapTextureFormat = TextureFormat_RGBA8_UNormSRGB;
 
     gRenderManager = std::make_unique<VulkanRenderManager>();
     if (!gRenderManager->Init(renderManagerInitInfo))
