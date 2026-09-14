@@ -53,6 +53,7 @@ private:
     {
         VkFence frameReadyFence;
         VkCommandPool directCommandPool;
+        VkCommandPool transferCommandPool;
         VkCommandBuffer directCommandBuffer;
     };
 
