@@ -22,6 +22,7 @@ public:
 
     bool NewFrame() override;
     void EndFrame() override;
+    void ExecuteTransferBatch() const override;
     void ExecuteFrame() const override;
     void WaitIdle() const override;
 

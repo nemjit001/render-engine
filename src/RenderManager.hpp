@@ -225,6 +225,9 @@ public:
     /// @brief End the current frame.
     virtual void EndFrame() = 0;
 
+    /// @brief Execute a transfer batch on the render manager.
+    virtual void ExecuteTransferBatch() const = 0;
+
     /// @brief Execute the frame commands for the current frame.
     virtual void ExecuteFrame() const = 0;
 

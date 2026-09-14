@@ -550,6 +550,42 @@ void VulkanRenderManager::EndFrame()
     _currentFrameIndex++;
 }
 
+void VulkanRenderManager::ExecuteTransferBatch() const
+{
+    // Create transfer fence
+    VkFenceCreateInfo transferFenceCreateInfo{};
+    transferFenceCreateInfo.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
+    transferFenceCreateInfo.pNext = nullptr;
+    transferFenceCreateInfo.flags = 0;
+
+    VkFence transferFence = VK_NULL_HANDLE;
+    if (VK_FAILED(vkCreateFence(_device, &transferFenceCreateInfo, nullptr, &transferFence))) {
+        return;
+    }
+
+    // TODO(nemjit001)
+    //  [ ] Create one-time submit command buffer
+    //  [ ]Record transfer batch in one-time submit command buffer
+
+    // Submit recorded transfer batch
+    VkSubmitInfo transferBatchSubmitInfo{};
+    transferBatchSubmitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+    transferBatchSubmitInfo.pNext = nullptr;
+    transferBatchSubmitInfo.waitSemaphoreCount = 0;
+    transferBatchSubmitInfo.pWaitDstStageMask = nullptr;
+    transferBatchSubmitInfo.pWaitSemaphores = nullptr;
+    transferBatchSubmitInfo.commandBufferCount = 0;
+    transferBatchSubmitInfo.pCommandBuffers = nullptr;
+    transferBatchSubmitInfo.signalSemaphoreCount = 0;
+    transferBatchSubmitInfo.pSignalSemaphores = nullptr;
+
+    vkQueueSubmit(_directQueue, 1, &transferBatchSubmitInfo, transferFence);
+
+    // Wait on and clean up transfer fence
+    vkWaitForFences(_device, 1, &transferFence, VK_TRUE, UINT64_MAX);
+    vkDestroyFence(_device, transferFence, nullptr);
+}
+
 void VulkanRenderManager::ExecuteFrame() const
 {
     VulkanFrameState const frameState = _frameStates[GetCurrentFrameInFlightIndex()];

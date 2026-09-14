@@ -74,6 +74,7 @@ void Engine::Frame()
         return;
     }
 
+    gRenderManager->ExecuteTransferBatch();
     gRenderManager->ExecuteFrame();
     gRenderManager->EndFrame();
 }
