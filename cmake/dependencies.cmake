@@ -1,5 +1,14 @@
 include(FetchContent)
 
+# Set up GoogleTest dependency
+set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
+FetchContent_Declare(GTest
+        GIT_REPOSITORY  https://github.com/google/googletest.git
+        GIT_TAG         v1.18.0
+        GIT_SHALLOW     TRUE
+        OVERRIDE_FIND_PACKAGE
+)
+
 # Set up SDL3 dependency
 FetchContent_Declare(SDL3
         GIT_REPOSITORY  https://github.com/libsdl-org/SDL.git

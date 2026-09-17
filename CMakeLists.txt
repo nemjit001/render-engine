@@ -6,17 +6,19 @@ enable_testing()
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 # Set up dependencies
-include(dependencies.cmake)
+include(cmake/dependencies.cmake)
+include(cmake/utils.cmake)
+find_package(GTest CONFIG REQUIRED)
 find_package(SDL3 CONFIG REQUIRED)
 find_package(spdlog CONFIG REQUIRED)
 find_package(volk CONFIG REQUIRED)
 find_package(VulkanMemoryAllocator CONFIG REQUIRED)
 
-# Set up RenderEngine target
-add_executable(RenderEngine WIN32)
-target_sources(RenderEngine
+# Set up RenderEngineLib library target
+add_library(RenderEngineLib STATIC)
+add_library(RenderEngine::Lib ALIAS RenderEngineLib)
+target_sources(RenderEngineLib
     PRIVATE
-        src/main.cpp
         src/Engine.cpp
         src/RenderManager.cpp
         src/RenderManagers/RenderTypes.hpp
@@ -33,27 +35,33 @@ target_sources(RenderEngine
         src/RenderManager.hpp
         src/RenderManagers/Vulkan/VulkanRenderManager.hpp
 )
+target_compile_features(RenderEngineLib
+    PRIVATE
+        cxx_std_17
+)
+target_link_libraries(RenderEngineLib
+    PUBLIC
+        GPUOpen::VulkanMemoryAllocator
+        SDL3::SDL3
+        spdlog::spdlog
+        volk::volk_headers
+)
+target_enable_extended_warnings(RenderEngineLib)
+
+# Set up RenderEngine executable target
+add_executable(RenderEngine WIN32)
+add_executable(RenderEngine::Bin ALIAS RenderEngine)
+target_sources(RenderEngine
+    PRIVATE
+        src/main.cpp
+)
 target_compile_features(RenderEngine
     PRIVATE
         cxx_std_17
 )
 target_link_libraries(RenderEngine
     PRIVATE
-        GPUOpen::VulkanMemoryAllocator
-        SDL3::SDL3
-        spdlog::spdlog
-        volk::volk_headers
+        RenderEngine::Lib
 )
-
-# Set up target warnings
-if (MSVC)
-    target_compile_options(RenderEngine PRIVATE /W4 /permissive-)
-else()
-    target_compile_options(RenderEngine PRIVATE -Wall -Wextra -Wpedantic -Wshadow)
-endif()
-
-# Copy runtime dll dependencies
-add_custom_command(TARGET RenderEngine POST_BUILD
-    COMMAND ${CMAKE_COMMAND} -E copy_if_different $<TARGET_RUNTIME_DLLS:RenderEngine> $<TARGET_FILE_DIR:RenderEngine>
-    VERBATIM
-)
+target_enable_extended_warnings(RenderEngine)
+target_copy_runtime_dlls(RenderEngine)
