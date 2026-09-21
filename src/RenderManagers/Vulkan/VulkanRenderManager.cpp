@@ -550,7 +550,7 @@ void VulkanRenderManager::EndFrame()
     _currentFrameIndex++;
 }
 
-void VulkanRenderManager::ExecuteTransferBatch() const
+void VulkanRenderManager::ExecuteTransferBatch(IRenderCommandList const* commandList) const
 {
     VulkanFrameState const& frameState = _frameStates[GetCurrentFrameInFlightIndex()];
 
@@ -620,7 +620,7 @@ void VulkanRenderManager::ExecuteTransferBatch() const
     vkResetCommandPool(_device, frameState.transferCommandPool, 0 /* No flags */);
 }
 
-void VulkanRenderManager::ExecuteFrame() const
+void VulkanRenderManager::ExecuteFrame(IRenderCommandList const* commandList) const
 {
     VulkanFrameState const frameState = _frameStates[GetCurrentFrameInFlightIndex()];
     

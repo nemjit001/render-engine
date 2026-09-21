@@ -12,6 +12,16 @@ static constexpr bool RENDERER_ENABLE_DEBUG = true;
 static constexpr bool RENDERER_ENABLE_DEBUG = false;
 #endif //NDEBUG
 
+static constexpr uint32_t   ALL_REMAINING_MIPS      = (~0u);
+static constexpr uint32_t   ALL_REMAINING_LAYERS    = (~0u);
+static constexpr uint64_t   WHOLE_SIZE              = (~0ull);
+static constexpr float      LOD_CLAMP_NONE          = 1'000.0F;
+
+static constexpr uint32_t   MAX_RENDER_TARGETS      = 8u;
+static constexpr uint32_t   MAX_DESCRIPTOR_SETS     = 4u;
+static constexpr uint32_t   MAX_DESCRIPTOR_BINDINGS = 32u;
+
+class IRenderCommandExecutor;
 class GPUBuffer;
 class GPUTexture;
 
@@ -136,6 +146,45 @@ enum TextureAspectFlagBits : uint32_t
 };
 typedef uint32_t TextureAspectFlags;
 
+/// @brief 2D resource offset.
+struct Offset2D
+{
+    int32_t x;
+    int32_t y;
+};
+
+/// @brief 3D resource offset.
+struct Offset3D
+{
+    int32_t x;
+    int32_t y;
+    int32_t z;
+};
+
+/// @brief 2D resource extent.
+struct Extent2D
+{
+    uint32_t width;
+    uint32_t height;
+};
+
+/// @brief 3D resource extent.
+struct Extent3D
+{
+    uint32_t width;
+    uint32_t height;
+    uint32_t depth;
+};
+
+struct TextureSubresource
+{
+    TextureAspectFlags aspect;
+    uint32_t baseMipLevel = 0;
+    uint32_t levelCount = ALL_REMAINING_MIPS;
+    uint32_t baseArrayLayer = 0;
+    uint32_t layerCount = ALL_REMAINING_LAYERS;
+};
+
 /// @brief Initialization info for the render manager.
 struct RenderManagerInitInfo
 {
@@ -170,7 +219,40 @@ struct GPUTextureDesc
     TextureAspectFlags aspectMask   = 0u;
 };
 
-/// @brief The RenderManager interface for managing render resources and frame submission can be implemented to support different render backends.
+/// @brief The RenderCommandList is used for recording render commands for execution on a render backend.
+class IRenderCommandList
+{
+public:
+    virtual ~IRenderCommandList() = default;
+
+    /// @brief Copy a buffer resource.
+    /// @param src Source buffer.
+    /// @param dst Destination buffer.
+    /// @param srcOffset Source offset in bytes.
+    /// @param dstOffset Destination offset in bytes.
+    /// @param size Copy size in bytes.
+    virtual void CopyBufferToBuffer(GPUBufferHandle src, GPUBufferHandle dst, size_t srcOffset, size_t dstOffset, size_t size) = 0;
+
+    /// @brief Copy a buffer to a texture resource.
+    /// @param src Source buffer.
+    /// @param dst Destination texture.
+    /// @param bufferOffset Buffer offset in bytes.
+    /// @param rowPitch Buffer row pitch (texels * bytes per texel)
+    /// @param rowCount Buffer row count (image height)
+    /// @param subresource Texture subresource target.
+    /// @param textureOffset Texture offset in texels.
+    /// @param textureExtent Texture extent in texels.
+    virtual void CopyBufferToTexture(GPUBufferHandle src, GPUTextureHandle dst,
+        size_t bufferOffset, uint32_t rowPitch, uint32_t rowCount,
+        TextureSubresource subresource, Offset3D textureOffset, Extent3D textureExtent
+    ) = 0;
+
+    /// @brief Execute a render command list on an underlying render backend executor.
+    /// @param executor RenderCommandExecutor to use for command execution.
+    virtual void Execute(IRenderCommandExecutor const* executor) = 0;
+};
+
+/// @brief The RenderManager interface is used for managing render resources and frame submission, and can be implemented to support different render backends.
 class IRenderManager
 {
 public:
@@ -226,10 +308,12 @@ public:
     virtual void EndFrame() = 0;
 
     /// @brief Execute a transfer batch on the render manager.
-    virtual void ExecuteTransferBatch() const = 0;
+    /// @param commandList Command list to execute on the graphics device.
+    virtual void ExecuteTransferBatch(IRenderCommandList const* commandList) const = 0;
 
     /// @brief Execute the frame commands for the current frame.
-    virtual void ExecuteFrame() const = 0;
+    /// @param commandList Command list to execute on the graphics device.
+    virtual void ExecuteFrame(IRenderCommandList const* commandList) const = 0;
 
     /// @brief Wait for the graphics device to be idle.
     virtual void WaitIdle() const = 0;

@@ -22,8 +22,8 @@ public:
 
     bool NewFrame() override;
     void EndFrame() override;
-    void ExecuteTransferBatch() const override;
-    void ExecuteFrame() const override;
+    void ExecuteTransferBatch(IRenderCommandList const* commandList) const override;
+    void ExecuteFrame(IRenderCommandList const* commandList) const override;
     void WaitIdle() const override;
 
     [[nodiscard]] TextureFormat GetSwapTextureFormat() const override { return _windowState.swapchainConfig.swapTextureFormat; }
