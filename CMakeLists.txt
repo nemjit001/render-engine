@@ -21,9 +21,12 @@ target_sources(RenderEngineLib
     PRIVATE
         src/Engine.cpp
         src/RenderManager.cpp
+        src/RenderManagers/RenderCommandList.cpp
+        src/RenderManagers/RenderCommandList.hpp
         src/RenderManagers/RenderTypes.hpp
         src/RenderManagers/Vulkan/UseVulkanLibs.cpp
         src/RenderManagers/Vulkan/VulkanRenderManager.cpp
+        src/RenderManagers/Vulkan/VulkanRenderManager.hpp
         src/RenderManagers/Vulkan/VulkanRenderTypes.cpp
         src/RenderManagers/Vulkan/VulkanRenderTypes.hpp
     PUBLIC
@@ -33,7 +36,6 @@ target_sources(RenderEngineLib
         src/Engine.hpp
         src/FatalError.hpp
         src/RenderManager.hpp
-        src/RenderManagers/Vulkan/VulkanRenderManager.hpp
 )
 target_compile_features(RenderEngineLib
     PRIVATE

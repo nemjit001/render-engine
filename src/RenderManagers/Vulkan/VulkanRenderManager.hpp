@@ -17,8 +17,10 @@ public:
 
     [[nodiscard]] GPUBufferHandle CreateGPUBuffer(GPUBufferDesc const& bufferDesc) override;
     [[nodiscard]] GPUTextureHandle CreateGPUTexture(GPUTextureDesc const& textureDesc) override;
+    [[nodiscard]] IRenderCommandList* CreateRenderCommandList() override;
     void DestroyGPUBuffer(GPUBufferHandle buffer) override;
     void DestroyGPUTexture(GPUTextureHandle texture) override;
+    void DestroyRenderCommandList(IRenderCommandList* commandList) override;
 
     bool NewFrame() override;
     void EndFrame() override;

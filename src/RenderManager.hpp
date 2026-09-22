@@ -21,7 +21,6 @@ static constexpr uint32_t   MAX_RENDER_TARGETS      = 8u;
 static constexpr uint32_t   MAX_DESCRIPTOR_SETS     = 4u;
 static constexpr uint32_t   MAX_DESCRIPTOR_BINDINGS = 32u;
 
-class IRenderCommandExecutor;
 class GPUBuffer;
 class GPUTexture;
 
@@ -242,14 +241,15 @@ public:
     /// @param subresource Texture subresource target.
     /// @param textureOffset Texture offset in texels.
     /// @param textureExtent Texture extent in texels.
-    virtual void CopyBufferToTexture(GPUBufferHandle src, GPUTextureHandle dst,
+    virtual void CopyBufferToTexture(
+        GPUBufferHandle src, GPUTextureHandle dst,
         size_t bufferOffset, uint32_t rowPitch, uint32_t rowCount,
         TextureSubresource subresource, Offset3D textureOffset, Extent3D textureExtent
     ) = 0;
 
-    /// @brief Execute a render command list on an underlying render backend executor.
-    /// @param executor RenderCommandExecutor to use for command execution.
-    virtual void Execute(IRenderCommandExecutor const* executor) = 0;
+    /// @brief Execute the render command list using an internal render command executor.
+    /// @param executor Executor to use for command execution.
+    virtual void Execute(class IRenderCommandExecutor* executor) = 0;
 };
 
 /// @brief The RenderManager interface is used for managing render resources and frame submission, and can be implemented to support different render backends.
@@ -291,6 +291,11 @@ public:
     [[nodiscard]]
     virtual GPUTextureHandle CreateGPUTexture(GPUTextureDesc const& textureDesc) = 0;
 
+    /// @brief Create a RenderCommandList.
+    /// @return A new RenderCommandList.
+    [[nodiscard]]
+    virtual IRenderCommandList* CreateRenderCommandList() = 0;
+
     /// @brief Destroy a GPU buffer.
     /// @param buffer Buffer to destroy.
     virtual void DestroyGPUBuffer(GPUBufferHandle buffer) = 0;
@@ -298,6 +303,10 @@ public:
     /// @brief Destroy a GPU texture.
     /// @param texture Texture to destroy.
     virtual void DestroyGPUTexture(GPUTextureHandle texture) = 0;
+
+    /// @brief Destroy a RenderCommandList.
+    /// @param commandList RenderCommandList to destroy.
+    virtual void DestroyRenderCommandList(IRenderCommandList* commandList) = 0;
 
     /// @brief Start a new frame.
     /// @return A boolean indicating successful frame start.

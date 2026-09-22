@@ -4,7 +4,8 @@
 #include <spdlog/spdlog.h>
 #include <SDL3/SDL_vulkan.h>
 #include "FatalError.hpp"
-#include "VulkanRenderTypes.hpp"
+#include "RenderManagers/Vulkan/VulkanRenderTypes.hpp"
+#include "RenderManagers/RenderCommandList.hpp"
 
 #define VK_SUCCEEDED(result)    (result == VK_SUCCESS)
 #define VK_FAILED(result)       (result != VK_SUCCESS)
@@ -468,6 +469,11 @@ GPUTextureHandle VulkanRenderManager::CreateGPUTexture(GPUTextureDesc const& tex
     return new VulkanTexture(image, view, allocation);
 }
 
+IRenderCommandList* VulkanRenderManager::CreateRenderCommandList()
+{
+    return new RenderCommandList();
+}
+
 void VulkanRenderManager::DestroyGPUBuffer(GPUBufferHandle buffer)
 {
     if (buffer->GetRenderBackend() == RenderBackend::Vulkan)
@@ -486,6 +492,11 @@ void VulkanRenderManager::DestroyGPUTexture(GPUTextureHandle texture)
         vulkanTexture->DestroyResources(_device, _allocator);
         delete texture;
     }
+}
+
+void VulkanRenderManager::DestroyRenderCommandList(IRenderCommandList* commandList)
+{
+    delete commandList;
 }
 
 bool VulkanRenderManager::NewFrame()
