@@ -561,74 +561,32 @@ void VulkanRenderManager::EndFrame()
     _currentFrameIndex++;
 }
 
+void VulkanRenderManager::WriteBuffer(GPUBufferHandle buffer, void const* data, size_t size, size_t offset)
+{
+    VulkanTransferBatch transferBatch{};
+    if (!StartTransferBatch(transferBatch)) {
+        return;
+    }
+
+    // TODO(nemjit001):
+    // [ ] Create upload buffer
+    // [ ] Copy data to upload buffer (map write)
+    // [ ] Copy upload buffer to destination buffer
+
+    EndTransferBatch(transferBatch);
+}
+
 void VulkanRenderManager::ExecuteTransferBatch(IRenderCommandList const* commandList) const
 {
-    VulkanFrameState const& frameState = _frameStates[GetCurrentFrameInFlightIndex()];
-
-    // Create transfer fence
-    VkFenceCreateInfo transferFenceCreateInfo{};
-    transferFenceCreateInfo.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
-    transferFenceCreateInfo.pNext = nullptr;
-    transferFenceCreateInfo.flags = 0;
-
-    VkFence transferFence = VK_NULL_HANDLE;
-    if (VK_FAILED(vkCreateFence(_device, &transferFenceCreateInfo, nullptr, &transferFence))) {
-        return;
-    }
-
-    // Create one-time submit command buffer
-    VkCommandBufferAllocateInfo oneShotCommandBufferAllocateInfo{};
-    oneShotCommandBufferAllocateInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
-    oneShotCommandBufferAllocateInfo.pNext = nullptr;
-    oneShotCommandBufferAllocateInfo.commandPool = frameState.transferCommandPool;
-    oneShotCommandBufferAllocateInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
-    oneShotCommandBufferAllocateInfo.commandBufferCount = 1;
-
-    VkCommandBuffer oneShotCommandBuffer = VK_NULL_HANDLE;
-    if (VK_FAILED(vkAllocateCommandBuffers(_device, &oneShotCommandBufferAllocateInfo, &oneShotCommandBuffer))) {
-        return;
-    }
-
-    // Begin command buffer recording
-    VkCommandBufferBeginInfo oneShotBeginInfo{};
-    oneShotBeginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
-    oneShotBeginInfo.pNext = nullptr;
-    oneShotBeginInfo.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
-    oneShotBeginInfo.pInheritanceInfo = nullptr;
-
-    if (VK_FAILED(vkBeginCommandBuffer(oneShotCommandBuffer, &oneShotBeginInfo))) {
+    VulkanTransferBatch transferBatch{};
+    if (!StartTransferBatch(transferBatch)) {
         return;
     }
 
     // TODO(nemjit001):
     // [ ] Record transfer batch in one-time submit command buffer
 
-    // End command buffer recording
-    if (VK_FAILED(vkEndCommandBuffer(oneShotCommandBuffer))) {
-        return;
-    }
-
-    // Submit recorded transfer batch
-    VkSubmitInfo transferBatchSubmitInfo{};
-    transferBatchSubmitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-    transferBatchSubmitInfo.pNext = nullptr;
-    transferBatchSubmitInfo.waitSemaphoreCount = 0;
-    transferBatchSubmitInfo.pWaitDstStageMask = nullptr;
-    transferBatchSubmitInfo.pWaitSemaphores = nullptr;
-    transferBatchSubmitInfo.commandBufferCount = 0;
-    transferBatchSubmitInfo.pCommandBuffers = nullptr;
-    transferBatchSubmitInfo.signalSemaphoreCount = 0;
-    transferBatchSubmitInfo.pSignalSemaphores = nullptr;
-
-    vkQueueSubmit(_directQueue, 1, &transferBatchSubmitInfo, transferFence);
-
-    // Wait on and clean up transfer fence
-    vkWaitForFences(_device, 1, &transferFence, VK_TRUE, UINT64_MAX);
-    vkDestroyFence(_device, transferFence, nullptr);
-
-    // Reset transfer pool
-    // TODO(nemjit001): Check if transfer pool reset per frame might be better?
-    vkResetCommandPool(_device, frameState.transferCommandPool, 0 /* No flags */);
+    EndTransferBatch(transferBatch);
 }
 
 void VulkanRenderManager::ExecuteFrame(IRenderCommandList const* commandList) const
@@ -1441,6 +1399,86 @@ void VulkanRenderManager::Present(VulkanWindowState& windowState) const
             FATAL_ERROR("Failed to present Vulkan swapchain image {} for frame {} (result: {})", windowState.currentSwapImageIdx, _currentFrameIndex, static_cast<uint32_t>(presentResult));
         }
     }
+}
+
+bool VulkanRenderManager::StartTransferBatch(VulkanTransferBatch& outTransferBatch) const
+{
+    VulkanFrameState const& frameState = _frameStates[GetCurrentFrameInFlightIndex()];
+
+    // Create transfer fence
+    VkFenceCreateInfo transferFenceCreateInfo{};
+    transferFenceCreateInfo.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
+    transferFenceCreateInfo.pNext = nullptr;
+    transferFenceCreateInfo.flags = 0;
+
+    VkFence transferFence = VK_NULL_HANDLE;
+    if (VK_FAILED(vkCreateFence(_device, &transferFenceCreateInfo, nullptr, &transferFence))) {
+        return false;
+    }
+
+    // Create one-time submit command buffer
+    VkCommandBufferAllocateInfo oneShotCommandBufferAllocateInfo{};
+    oneShotCommandBufferAllocateInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+    oneShotCommandBufferAllocateInfo.pNext = nullptr;
+    oneShotCommandBufferAllocateInfo.commandPool = frameState.transferCommandPool;
+    oneShotCommandBufferAllocateInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+    oneShotCommandBufferAllocateInfo.commandBufferCount = 1;
+
+    VkCommandBuffer oneShotCommandBuffer = VK_NULL_HANDLE;
+    if (VK_FAILED(vkAllocateCommandBuffers(_device, &oneShotCommandBufferAllocateInfo, &oneShotCommandBuffer)))
+    {
+        vkDestroyFence(_device, transferFence, nullptr);
+        return false;
+    }
+
+    // Begin command buffer recording
+    VkCommandBufferBeginInfo oneShotBeginInfo{};
+    oneShotBeginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+    oneShotBeginInfo.pNext = nullptr;
+    oneShotBeginInfo.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+    oneShotBeginInfo.pInheritanceInfo = nullptr;
+
+    if (VK_FAILED(vkBeginCommandBuffer(oneShotCommandBuffer, &oneShotBeginInfo)))
+    {
+        vkDestroyFence(_device, transferFence, nullptr);
+        return false;
+    }
+
+    outTransferBatch.frameInFlight = GetCurrentFrameInFlightIndex();
+    outTransferBatch.transferFence = transferFence;
+    outTransferBatch.transferCommandBuffer = oneShotCommandBuffer;
+    return true;
+}
+
+void VulkanRenderManager::EndTransferBatch(VulkanTransferBatch const& transferBatch) const
+{
+    // End command buffer recording
+    if (VK_FAILED(vkEndCommandBuffer(transferBatch.transferCommandBuffer))) {
+        return;
+    }
+
+    // Submit recorded transfer batch
+    VkSubmitInfo transferBatchSubmitInfo{};
+    transferBatchSubmitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+    transferBatchSubmitInfo.pNext = nullptr;
+    transferBatchSubmitInfo.waitSemaphoreCount = 0;
+    transferBatchSubmitInfo.pWaitDstStageMask = nullptr;
+    transferBatchSubmitInfo.pWaitSemaphores = nullptr;
+    transferBatchSubmitInfo.commandBufferCount = 1;
+    transferBatchSubmitInfo.pCommandBuffers = &transferBatch.transferCommandBuffer;
+    transferBatchSubmitInfo.signalSemaphoreCount = 0;
+    transferBatchSubmitInfo.pSignalSemaphores = nullptr;
+
+    vkQueueSubmit(_directQueue, 1, &transferBatchSubmitInfo, transferBatch.transferFence);
+
+    // Wait on and clean up transfer fence
+    vkWaitForFences(_device, 1, &transferBatch.transferFence, VK_TRUE, UINT64_MAX);
+    vkDestroyFence(_device, transferBatch.transferFence, nullptr);
+
+    // Reset transfer pool
+    // TODO(nemjit001): Check if transfer pool reset per frame might be better?
+    VulkanFrameState const& frameState = _frameStates[transferBatch.frameInFlight];
+    vkResetCommandPool(_device, frameState.transferCommandPool, 0 /* No flags */);
 }
 
 void VulkanRenderManager::OnWindowResize(VulkanWindowState& windowState)

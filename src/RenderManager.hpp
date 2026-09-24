@@ -316,6 +316,13 @@ public:
     /// @brief End the current frame.
     virtual void EndFrame() = 0;
 
+    /// @brief Write data to a buffer, doing a blocking transfer.
+    /// @param buffer Target buffer.
+    /// @param data Buffer data pointer.
+    /// @param size Size of the transfer.
+    /// @param offset Offset into the target buffer.
+    virtual void WriteBuffer(GPUBufferHandle buffer, void const* data, size_t size, size_t offset) = 0;
+    
     /// @brief Execute a transfer batch on the render manager.
     /// @param commandList Command list to execute on the graphics device.
     virtual void ExecuteTransferBatch(IRenderCommandList const* commandList) const = 0;

@@ -24,6 +24,7 @@ public:
 
     bool NewFrame() override;
     void EndFrame() override;
+    void WriteBuffer(GPUBufferHandle buffer, void const* data, size_t size, size_t offset) override;
     void ExecuteTransferBatch(IRenderCommandList const* commandList) const override;
     void ExecuteFrame(IRenderCommandList const* commandList) const override;
     void WaitIdle() const override;
@@ -81,11 +82,19 @@ private:
         VulkanSwapchainConfig swapchainConfig;
         std::vector<VkImage> swapImages;
         std::vector<VkImageView> swapImageViews;
-        std::vector<VkSemaphore> swapImageAcquiredSemaphores; //< Sized on frames in flight
-        std::vector<VkSemaphore> swapImageReleasedSemaphores; //< Sized on swap image count
-        uint32_t currentSwapImageIdx;
-        bool reconfigureSwapchain; //< Set this to 'true' to queue up a swapchain reconfigure
-        bool isVisible; //< Indicates if the window is visible and can be rendered to.
+        std::vector<VkSemaphore> swapImageAcquiredSemaphores;   //< Sized on frames in flight
+        std::vector<VkSemaphore> swapImageReleasedSemaphores;   //< Sized on swap image count
+        uint32_t currentSwapImageIdx = 0;                       //< Active swap image index
+        bool reconfigureSwapchain = false;                      //< Set this to 'true' to queue up a swapchain reconfigure
+        bool isVisible = false;                                 //< Indicates if the window is visible and can be rendered to
+    };
+
+    /// @brief The VulkanTransferBatch struct contains state related to transfer operations.
+    struct VulkanTransferBatch
+    {
+        uint32_t frameInFlight = 0;                             //< Frame index for which this batch was started
+        VkFence transferFence = VK_NULL_HANDLE;                 //< Synchronization fence for transfer operation
+        VkCommandBuffer transferCommandBuffer = VK_NULL_HANDLE; //< Command buffer for transfer commands
     };
 
 private:
@@ -160,6 +169,15 @@ private:
     /// @brief Present the last acquired swapchain image for a window state, may fatally exit if an unrecoverable error is encountered.
     /// @param windowState Window state to present for.
     void Present(VulkanWindowState& windowState) const;
+
+    /// @brief Start a transfer batch.
+    /// @param outTransferBatch Out transfer batch structure.
+    /// @return A boolean indicating successful start.
+    bool StartTransferBatch(VulkanTransferBatch& outTransferBatch) const;
+
+    /// @brief End a transfer batch, submitting the batch in the process.
+    /// @param transferBatch Transfer batch to submit.
+    void EndTransferBatch(VulkanTransferBatch const& transferBatch) const;
 
     /// @brief Handle a window resize event.
     /// @param windowState Window state to handle resize event for.

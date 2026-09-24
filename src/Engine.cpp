@@ -49,45 +49,24 @@ bool Engine::Init()
         };
 
         // Create vertex buffer
-        GPUBufferDesc vertexBufferHostDesc{};
-        vertexBufferHostDesc.heapType = GPUHeapType_Upload;
-        vertexBufferHostDesc.size = sizeof(sVertexData);
-        vertexBufferHostDesc.usage = BufferUsage_TransferSrc;
-
         GPUBufferDesc vertexBufferDeviceDesc{};
         vertexBufferDeviceDesc.heapType = GPUHeapType_Default;
         vertexBufferDeviceDesc.size = sizeof(sVertexData);
         vertexBufferDeviceDesc.usage = BufferUsage_TransferDst | BufferUsage_VertexBuffer;
 
-        GPUBufferHandle vertexBufferHost = gRenderManager->CreateGPUBuffer(vertexBufferHostDesc);
         GPUBufferHandle vertexBufferDevice = gRenderManager->CreateGPUBuffer(vertexBufferDeviceDesc);
         
         // Create index buffer
-        GPUBufferDesc indexBufferHostDesc{};
-        indexBufferHostDesc.heapType = GPUHeapType_Upload;
-        indexBufferHostDesc.size = sizeof(sIndexData);
-        indexBufferHostDesc.usage = BufferUsage_TransferSrc;
-
         GPUBufferDesc indexBufferDeviceDesc{};
         indexBufferDeviceDesc.heapType = GPUHeapType_Default;
         indexBufferDeviceDesc.size = sizeof(sIndexData);
         indexBufferDeviceDesc.usage = BufferUsage_TransferDst | BufferUsage_IndexBuffer;
 
-        GPUBufferHandle indexBufferHost = gRenderManager->CreateGPUBuffer(indexBufferHostDesc);
         GPUBufferHandle indexBufferDevice = gRenderManager->CreateGPUBuffer(indexBufferDeviceDesc);
 
-        // Upload data to device
-        IRenderCommandList* uploadCommandList = gRenderManager->CreateRenderCommandList();
-        uploadCommandList->CopyBufferToBuffer(vertexBufferHost, vertexBufferDevice, 0, 0, sizeof(sVertexData));
-        uploadCommandList->CopyBufferToBuffer(indexBufferHost, indexBufferDevice, 0, 0, sizeof(sIndexData));
-
-        // Execute transfer batch
-        gRenderManager->ExecuteTransferBatch(uploadCommandList);
-        gRenderManager->DestroyRenderCommandList(uploadCommandList);
-
-        // Clean up upload buffers
-        gRenderManager->DestroyGPUBuffer(vertexBufferHost);
-        gRenderManager->DestroyGPUBuffer(indexBufferHost);
+        // Write buffers
+        gRenderManager->WriteBuffer(vertexBufferDevice, sVertexData, sizeof(sVertexData), 0);
+        gRenderManager->WriteBuffer(indexBufferDevice, sIndexData, sizeof(sIndexData), 0);
 
         gVertexBufferHandle = vertexBufferDevice;
         gIndexBufferHandle = indexBufferDevice;
