@@ -54,22 +54,28 @@ bool Engine::Init()
         vertexBufferDeviceDesc.size = sizeof(sVertexData);
         vertexBufferDeviceDesc.usage = BufferUsage_TransferDst | BufferUsage_VertexBuffer;
 
-        GPUBufferHandle vertexBufferDevice = gRenderManager->CreateGPUBuffer(vertexBufferDeviceDesc);
+        GPUBufferHandle vertexBuffer = gRenderManager->CreateGPUBuffer(vertexBufferDeviceDesc);
+        if (!vertexBuffer) {
+            return false;
+        }
         
         // Create index buffer
-        GPUBufferDesc indexBufferDeviceDesc{};
-        indexBufferDeviceDesc.heapType = GPUHeapType_Default;
-        indexBufferDeviceDesc.size = sizeof(sIndexData);
-        indexBufferDeviceDesc.usage = BufferUsage_TransferDst | BufferUsage_IndexBuffer;
+        GPUBufferDesc indexBufferDesc{};
+        indexBufferDesc.heapType = GPUHeapType_Default;
+        indexBufferDesc.size = sizeof(sIndexData);
+        indexBufferDesc.usage = BufferUsage_TransferDst | BufferUsage_IndexBuffer;
 
-        GPUBufferHandle indexBufferDevice = gRenderManager->CreateGPUBuffer(indexBufferDeviceDesc);
+        GPUBufferHandle indexBuffer = gRenderManager->CreateGPUBuffer(indexBufferDesc);
+        if (!indexBuffer) {
+            return false;
+        }
 
         // Write buffers
-        gRenderManager->WriteBuffer(vertexBufferDevice, sVertexData, sizeof(sVertexData), 0);
-        gRenderManager->WriteBuffer(indexBufferDevice, sIndexData, sizeof(sIndexData), 0);
+        gRenderManager->WriteBuffer(vertexBuffer, sVertexData, sizeof(sVertexData), 0);
+        gRenderManager->WriteBuffer(indexBuffer, sIndexData, sizeof(sIndexData), 0);
 
-        gVertexBufferHandle = vertexBufferDevice;
-        gIndexBufferHandle = indexBufferDevice;
+        gVertexBufferHandle = vertexBuffer;
+        gIndexBufferHandle = indexBuffer;
     }
 
     spdlog::info("Initialized!");
@@ -117,14 +123,17 @@ void Engine::ProcessEvent(SDL_Event const& event)
 
 void Engine::Frame()
 {
+    // Acquire new frame
     if (!gRenderManager->NewFrame()) {
         return;
     }
 
+    // Record frame commands and dispatch
     IRenderCommandList* frameCommandList = gRenderManager->CreateRenderCommandList();
-    gRenderManager->ExecuteFrame(frameCommandList);
+    gRenderManager->DispatchFrame(frameCommandList);
     gRenderManager->DestroyRenderCommandList(frameCommandList);
 
+    // End frame
     gRenderManager->EndFrame();
 }
 

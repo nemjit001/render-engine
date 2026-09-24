@@ -23,6 +23,8 @@ target_sources(RenderEngineLib
         src/RenderManager.cpp
         src/RenderManagers/RenderCommandList.cpp
         src/RenderManagers/RenderCommandList.hpp
+        src/RenderManagers/RenderCommands.cpp
+        src/RenderManagers/RenderCommands.hpp
         src/RenderManagers/RenderTypes.hpp
         src/RenderManagers/Vulkan/UseVulkanLibs.cpp
         src/RenderManagers/Vulkan/VulkanRenderManager.cpp

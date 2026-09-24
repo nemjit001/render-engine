@@ -561,35 +561,62 @@ void VulkanRenderManager::EndFrame()
     _currentFrameIndex++;
 }
 
+void VulkanRenderManager::MapBuffer(GPUBufferHandle buffer, void** outData, size_t size, size_t offset)
+{
+    if (buffer->GetRenderBackend() == RenderBackend::Vulkan)
+    {
+        auto* vulkanBuffer = static_cast<VulkanBuffer*>(buffer);
+        vmaMapMemory(_allocator, vulkanBuffer->GetAllocation(), outData);
+    }
+}
+
+void VulkanRenderManager::UnmapBuffer(GPUBufferHandle buffer)
+{
+    if (buffer->GetRenderBackend() == RenderBackend::Vulkan)
+    {
+        auto* vulkanBuffer = static_cast<VulkanBuffer*>(buffer);
+        vmaUnmapMemory(_allocator, vulkanBuffer->GetAllocation());
+    }
+}
+
 void VulkanRenderManager::WriteBuffer(GPUBufferHandle buffer, void const* data, size_t size, size_t offset)
 {
-    VulkanTransferBatch transferBatch{};
-    if (!StartTransferBatch(transferBatch)) {
+    // Create upload buffer
+    GPUBufferDesc uploadBufferDesc{};
+    uploadBufferDesc.heapType = GPUHeapType_Upload;
+    uploadBufferDesc.size = size;
+    uploadBufferDesc.usage = BufferUsage_TransferSrc;
+
+    GPUBufferHandle uploadBuffer = CreateGPUBuffer(uploadBufferDesc);
+    if (!uploadBuffer) {
         return;
     }
 
-    // TODO(nemjit001):
-    // [ ] Create upload buffer
-    // [ ] Copy data to upload buffer (map write)
-    // [ ] Copy upload buffer to destination buffer
+    // Copy buffer data
+    void* bufferData = nullptr;
+    MapBuffer(uploadBuffer, &bufferData, size, 0);
+    std::memcpy(bufferData, data, size);
+    UnmapBuffer(uploadBuffer);
 
-    EndTransferBatch(transferBatch);
+    // Copy to target buffer
+    IRenderCommandList* uploadCommandList = CreateRenderCommandList();
+    uploadCommandList->CopyBufferToBuffer(uploadBuffer, buffer, 0, offset, size);
+    DispatchTransferBatch(uploadCommandList);
+    DestroyRenderCommandList(uploadCommandList);
 }
 
-void VulkanRenderManager::ExecuteTransferBatch(IRenderCommandList const* commandList) const
+void VulkanRenderManager::DispatchTransferBatch(IRenderCommandList const* commandList) const
 {
     VulkanTransferBatch transferBatch{};
     if (!StartTransferBatch(transferBatch)) {
         return;
     }
 
-    // TODO(nemjit001):
-    // [ ] Record transfer batch in one-time submit command buffer
-
+    commandList->Dispatch(nullptr);
     EndTransferBatch(transferBatch);
 }
 
-void VulkanRenderManager::ExecuteFrame(IRenderCommandList const* commandList) const
+void VulkanRenderManager::DispatchFrame(IRenderCommandList const* commandList) const
 {
     VulkanFrameState const frameState = _frameStates[GetCurrentFrameInFlightIndex()];
     

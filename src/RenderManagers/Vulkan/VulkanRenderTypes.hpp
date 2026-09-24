@@ -16,6 +16,16 @@ public:
     /// @param allocator VMA allocator to use for resource destruction.
     void DestroyResources(VkDevice device, VmaAllocator allocator);
 
+    /// @brief Get the buffer handle.
+    /// @return 
+    [[nodiscard]]
+    VkBuffer GetBuffer() const { return _buffer; }
+    
+    /// @brief Get the buffer allocation.
+    /// @return 
+    [[nodiscard]]
+    VmaAllocation GetAllocation() const { return _allocation; }
+
     [[nodiscard]] RenderBackend GetRenderBackend() const override { return RenderBackend::Vulkan; }
 
 private:
@@ -32,6 +42,21 @@ public:
     /// @param device Vulkan device to use for resource destruction.
     /// @param allocator VMA allocator to use for resource destruction.
     void DestroyResources(VkDevice device, VmaAllocator allocator);
+
+    /// @brief Get the image handle.
+    /// @return 
+    [[nodiscard]]
+    VkImage GetImage() const { return _image; }
+
+    /// @brief Get the image view handle.
+    /// @return 
+    [[nodiscard]]
+    VkImageView GetImageView() const { return _view; }
+
+    /// @brief Get the image allocation.
+    /// @return 
+    [[nodiscard]]
+    VmaAllocation GetAllocation() const { return _allocation; }
 
     [[nodiscard]] RenderBackend GetRenderBackend() const override { return RenderBackend::Vulkan; }
 

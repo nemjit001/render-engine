@@ -247,9 +247,9 @@ public:
         TextureSubresource subresource, Offset3D textureOffset, Extent3D textureExtent
     ) = 0;
 
-    /// @brief Execute the render command list using an internal render command executor.
+    /// @brief Dispatch the render command list using an internal render command executor.
     /// @param executor Executor to use for command execution.
-    virtual void Execute(class IRenderCommandExecutor* executor) = 0;
+    virtual void Dispatch(class IRenderCommandExecutor* executor) const = 0;
 };
 
 /// @brief The RenderManager interface is used for managing render resources and frame submission, and can be implemented to support different render backends.
@@ -316,7 +316,18 @@ public:
     /// @brief End the current frame.
     virtual void EndFrame() = 0;
 
-    /// @brief Write data to a buffer, doing a blocking transfer.
+    /// @brief Map a buffer into host address space.
+    /// @param buffer Buffer to map.
+    /// @param outData Out pointer to the buffer address.
+    /// @param size Size of the mapped region.
+    /// @param offset Offset of the mapped region from the start of the buffer.
+    virtual void MapBuffer(GPUBufferHandle buffer, void** outData, size_t size, size_t offset) = 0;
+
+    /// @brief Unmap a mapped buffer.
+    /// @param buffer Buffer to unmap.
+    virtual void UnmapBuffer(GPUBufferHandle buffer) = 0;
+
+    /// @brief Write data to a buffer, performs a blocking transfer of the buffer data.
     /// @param buffer Target buffer.
     /// @param data Buffer data pointer.
     /// @param size Size of the transfer.
@@ -325,11 +336,11 @@ public:
     
     /// @brief Execute a transfer batch on the render manager.
     /// @param commandList Command list to execute on the graphics device.
-    virtual void ExecuteTransferBatch(IRenderCommandList const* commandList) const = 0;
+    virtual void DispatchTransferBatch(IRenderCommandList const* commandList) const = 0;
 
     /// @brief Execute the frame commands for the current frame.
     /// @param commandList Command list to execute on the graphics device.
-    virtual void ExecuteFrame(IRenderCommandList const* commandList) const = 0;
+    virtual void DispatchFrame(IRenderCommandList const* commandList) const = 0;
 
     /// @brief Wait for the graphics device to be idle.
     virtual void WaitIdle() const = 0;

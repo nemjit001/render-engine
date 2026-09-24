@@ -2,13 +2,26 @@
 #ifndef RENDER_COMMAND_LIST_HPP
 #define RENDER_COMMAND_LIST_HPP
 
+#include <memory>
+#include <vector>
 #include "RenderManager.hpp"
 
-/// @brief The RenderCommandExecutor interface implements actual command forwarding to an underlying graphics backend.
+/// @brief The RenderCommandExecutor interface implements command execution for an underlying graphics backend.
 class IRenderCommandExecutor
 {
 public:
     virtual ~IRenderCommandExecutor() = default;
+};
+
+/// @brief The RenderCommand interface implements an executable render command.
+class IRenderCommand
+{
+public:
+    virtual ~IRenderCommand() = default;
+
+    /// @brief Execute the render command using a render command executor.
+    /// @param executor Executor to use for command execution.
+    virtual void Execute(IRenderCommandExecutor* executor) const = 0;
 };
 
 /// @brief The internal RenderCommandList implementation.
@@ -23,7 +36,10 @@ public:
         TextureSubresource subresource, Offset3D textureOffset, Extent3D textureExtent
     ) override;
 
-    void Execute(IRenderCommandExecutor* executor) override;
+    void Dispatch(IRenderCommandExecutor* executor) const override;
+
+private:
+    std::vector<std::unique_ptr<IRenderCommand>> _renderCommands;
 };
 
 #endif //RENDER_COMMAND_LIST_HPP

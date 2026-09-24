@@ -24,9 +24,11 @@ public:
 
     bool NewFrame() override;
     void EndFrame() override;
+    void MapBuffer(GPUBufferHandle buffer, void** outData, size_t size, size_t offset) override;
+    void UnmapBuffer(GPUBufferHandle buffer) override;
     void WriteBuffer(GPUBufferHandle buffer, void const* data, size_t size, size_t offset) override;
-    void ExecuteTransferBatch(IRenderCommandList const* commandList) const override;
-    void ExecuteFrame(IRenderCommandList const* commandList) const override;
+    void DispatchTransferBatch(IRenderCommandList const* commandList) const override;
+    void DispatchFrame(IRenderCommandList const* commandList) const override;
     void WaitIdle() const override;
 
     [[nodiscard]] TextureFormat GetSwapTextureFormat() const override { return _windowState.swapchainConfig.swapTextureFormat; }
