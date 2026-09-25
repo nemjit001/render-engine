@@ -11,6 +11,17 @@ class IRenderCommandExecutor
 {
 public:
     virtual ~IRenderCommandExecutor() = default;
+
+    virtual void CopyBufferToBuffer(
+        GPUBufferHandle src, GPUBufferHandle dst,
+        size_t srcOffset, size_t dstOffset, size_t size
+    ) = 0;
+
+    virtual void CopyBufferToTexture(
+        GPUBufferHandle src, GPUTextureHandle dst,
+        size_t bufferOffset, uint32_t rowPitch, uint32_t rowCount,
+        TextureSubresource subresource, Offset3D textureOffset, Extent3D textureExtent
+    ) = 0;
 };
 
 /// @brief The RenderCommand interface implements an executable render command.
@@ -28,7 +39,10 @@ public:
 class RenderCommandList : public IRenderCommandList
 {
 public:
-    void CopyBufferToBuffer(GPUBufferHandle src, GPUBufferHandle dst, size_t srcOffset, size_t dstOffset, size_t size) override;
+    void CopyBufferToBuffer(
+        GPUBufferHandle src, GPUBufferHandle dst,
+        size_t srcOffset, size_t dstOffset, size_t size
+    ) override;
 
     void CopyBufferToTexture(
         GPUBufferHandle src, GPUTextureHandle dst,

@@ -24,7 +24,7 @@ public:
 
     bool NewFrame() override;
     void EndFrame() override;
-    void MapBuffer(GPUBufferHandle buffer, void** outData, size_t size, size_t offset) override;
+    [[nodiscard]] bool MapBuffer(GPUBufferHandle buffer, void** outData, size_t size, size_t offset) override;
     void UnmapBuffer(GPUBufferHandle buffer) override;
     void WriteBuffer(GPUBufferHandle buffer, void const* data, size_t size, size_t offset) override;
     void DispatchTransferBatch(IRenderCommandList const* commandList) const override;

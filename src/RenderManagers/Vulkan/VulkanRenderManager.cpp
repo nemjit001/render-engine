@@ -4,8 +4,9 @@
 #include <spdlog/spdlog.h>
 #include <SDL3/SDL_vulkan.h>
 #include "FatalError.hpp"
-#include "RenderManagers/Vulkan/VulkanRenderTypes.hpp"
 #include "RenderManagers/RenderCommandList.hpp"
+#include "RenderManagers/Vulkan/VulkanCommandExecutor.hpp"
+#include "RenderManagers/Vulkan/VulkanRenderTypes.hpp"
 
 #define VK_SUCCEEDED(result)    (result == VK_SUCCESS)
 #define VK_FAILED(result)       (result != VK_SUCCESS)
@@ -561,13 +562,28 @@ void VulkanRenderManager::EndFrame()
     _currentFrameIndex++;
 }
 
-void VulkanRenderManager::MapBuffer(GPUBufferHandle buffer, void** outData, size_t size, size_t offset)
+bool VulkanRenderManager::MapBuffer(GPUBufferHandle buffer, void** outData, [[maybe_unused]] size_t size, size_t offset)
 {
     if (buffer->GetRenderBackend() == RenderBackend::Vulkan)
     {
+        // Check out data pointer
+        if (outData == nullptr) {
+            return false;
+        }
+        
+        // Map buffer
         auto* vulkanBuffer = static_cast<VulkanBuffer*>(buffer);
-        vmaMapMemory(_allocator, vulkanBuffer->GetAllocation(), outData);
+        if (VK_FAILED(vmaMapMemory(_allocator, vulkanBuffer->GetAllocation(), outData))) {
+            return false;
+        }
+
+        // Return requested offset
+        uintptr_t const outDataAddress = reinterpret_cast<uintptr_t>(*outData) + offset;
+        *outData = reinterpret_cast<void*>(outDataAddress);
+        return true;
     }
+
+    return false;
 }
 
 void VulkanRenderManager::UnmapBuffer(GPUBufferHandle buffer)
@@ -592,9 +608,15 @@ void VulkanRenderManager::WriteBuffer(GPUBufferHandle buffer, void const* data, 
         return;
     }
 
-    // Copy buffer data
+    // Map buffer memory
     void* bufferData = nullptr;
-    MapBuffer(uploadBuffer, &bufferData, size, 0);
+    if (!MapBuffer(uploadBuffer, &bufferData, size, 0))
+    {
+        DestroyGPUBuffer(uploadBuffer);
+        return;
+    }
+
+    // Copy buffer data
     std::memcpy(bufferData, data, size);
     UnmapBuffer(uploadBuffer);
 
@@ -602,7 +624,10 @@ void VulkanRenderManager::WriteBuffer(GPUBufferHandle buffer, void const* data, 
     IRenderCommandList* uploadCommandList = CreateRenderCommandList();
     uploadCommandList->CopyBufferToBuffer(uploadBuffer, buffer, 0, offset, size);
     DispatchTransferBatch(uploadCommandList);
+
+    // Cleanup
     DestroyRenderCommandList(uploadCommandList);
+    DestroyGPUBuffer(uploadBuffer);
 }
 
 void VulkanRenderManager::DispatchTransferBatch(IRenderCommandList const* commandList) const
@@ -612,7 +637,8 @@ void VulkanRenderManager::DispatchTransferBatch(IRenderCommandList const* comman
         return;
     }
 
-    commandList->Dispatch(nullptr);
+    VulkanCommandExecutor commandExecutor(transferBatch.transferCommandBuffer);
+    commandList->Dispatch(&commandExecutor);
     EndTransferBatch(transferBatch);
 }
 

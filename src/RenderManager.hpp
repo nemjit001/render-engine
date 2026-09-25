@@ -230,7 +230,10 @@ public:
     /// @param srcOffset Source offset in bytes.
     /// @param dstOffset Destination offset in bytes.
     /// @param size Copy size in bytes.
-    virtual void CopyBufferToBuffer(GPUBufferHandle src, GPUBufferHandle dst, size_t srcOffset, size_t dstOffset, size_t size) = 0;
+    virtual void CopyBufferToBuffer(
+        GPUBufferHandle src, GPUBufferHandle dst,
+        size_t srcOffset, size_t dstOffset, size_t size
+    ) = 0;
 
     /// @brief Copy a buffer to a texture resource.
     /// @param src Source buffer.
@@ -321,7 +324,9 @@ public:
     /// @param outData Out pointer to the buffer address.
     /// @param size Size of the mapped region.
     /// @param offset Offset of the mapped region from the start of the buffer.
-    virtual void MapBuffer(GPUBufferHandle buffer, void** outData, size_t size, size_t offset) = 0;
+    /// @return A boolean indicating successful mapping of the buffer.
+    [[nodiscard]]
+    virtual bool MapBuffer(GPUBufferHandle buffer, void** outData, size_t size, size_t offset) = 0;
 
     /// @brief Unmap a mapped buffer.
     /// @param buffer Buffer to unmap.

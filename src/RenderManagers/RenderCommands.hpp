@@ -8,8 +8,12 @@
 class CopyBufferToBufferCommand : public IRenderCommand
 {
 public:
-    constexpr CopyBufferToBufferCommand(GPUBufferHandle src, GPUBufferHandle dst, size_t srcOffset, size_t dstOffset, size_t size)
-        : _srcBuffer(src), _dstBuffer(dst), _srcOffset(srcOffset), _dstOffset(dstOffset), _size(size) {}
+    constexpr CopyBufferToBufferCommand(
+        GPUBufferHandle src, GPUBufferHandle dst,
+        size_t srcOffset, size_t dstOffset, size_t size
+    )
+        : _srcBuffer(src), _dstBuffer(dst),
+            _srcOffset(srcOffset), _dstOffset(dstOffset), _size(size) {}
 
     void Execute(IRenderCommandExecutor* executor) const override;
 

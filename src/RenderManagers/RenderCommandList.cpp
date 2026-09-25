@@ -2,9 +2,15 @@
 
 #include "RenderManagers/RenderCommands.hpp"
 
-void RenderCommandList::CopyBufferToBuffer(GPUBufferHandle src, GPUBufferHandle dst, size_t srcOffset, size_t dstOffset, size_t size)
+void RenderCommandList::CopyBufferToBuffer(
+    GPUBufferHandle src, GPUBufferHandle dst,
+    size_t srcOffset, size_t dstOffset, size_t size
+)
 {
-    _renderCommands.push_back(std::make_unique<CopyBufferToBufferCommand>(src, dst, srcOffset, dstOffset, size));
+    _renderCommands.push_back(std::make_unique<CopyBufferToBufferCommand>(
+        src, dst,
+        srcOffset, dstOffset, size
+    ));
 }
     
 void RenderCommandList::CopyBufferToTexture(
@@ -13,7 +19,11 @@ void RenderCommandList::CopyBufferToTexture(
     TextureSubresource subresource, Offset3D textureOffset, Extent3D textureExtent
 )
 {
-    _renderCommands.push_back(std::make_unique<CopyBufferToTextureCommand>(src, dst, bufferOffset, rowPitch, rowCount, subresource, textureOffset, textureExtent));
+    _renderCommands.push_back(std::make_unique<CopyBufferToTextureCommand>(
+        src, dst,
+        bufferOffset, rowPitch, rowCount,
+        subresource, textureOffset, textureExtent
+    ));
 }
 
 void RenderCommandList::Dispatch(IRenderCommandExecutor* executor) const
